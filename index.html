@@ -10,21 +10,21 @@
     <script>
         AFRAME.registerComponent('waypoints', {
             init: function () {
-                const params = new URLSearchParams(window.location.search);
-                const routeId = params.get('routeId');
-                if (routeId) {
-                    this.loadWaypoints(routeId);
-                } else {
+                // const params = new URLSearchParams(window.location.search);
+                // const routeId = params.get('routeId');
+                // if (routeId) {
+                //     this.loadWaypoints(routeId);
+                // } else {
                     //For testing: use current location
                     this.loadTestWaypoints();
-                }
+                // }
             },
-            loadWaypoints: function (routeId) {
-                fetch(`http://localhost:3000/get-waypoints/${routeId}`)
-                    .then(response => response.json())
-                    .then(waypoints => this.createArrows(waypoints))
-                    .catch(error => console.error('Error loading waypoints:', error));
-            },
+            // loadWaypoints: function (routeId) {
+            //     fetch(`http://localhost:3000/get-waypoints/${routeId}`)
+            //         .then(response => response.json())
+            //         .then(waypoints => this.createArrows(waypoints))
+            //         .catch(error => console.error('Error loading waypoints:', error));
+            // },
             loadTestWaypoints: function () {
                 if ("geolocation" in navigator) {
                     navigator.geolocation.getCurrentPosition((position) => {
