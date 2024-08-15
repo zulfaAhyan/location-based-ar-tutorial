@@ -3,13 +3,10 @@
 <head>
     <meta charset='utf-8'>
     <meta http-equiv='X-UA-Compatible' content='IE=edge'>
-    <title>GeoAR.js Directions with Images</title>
-    <script src='https://aframe.io/releases/0.9.2/aframe.min.js'></script>
-    <script src="https://raw.githack.com/jeromeetienne/AR.js/master/aframe/build/aframe-ar.min.js"></script>
+    <title>GeoAR.js Directions</title>
+    <script src='https://aframe.io/releases/1.2.0/aframe.min.js'></script>
+    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar-nft.js"></script>
     <script src="https://raw.githack.com/donmccurdy/aframe-extras/master/dist/aframe-extras.loaders.min.js"></script>
-    <script>
-        THREEx.ArToolkitContext.baseURL = 'https://raw.githack.com/jeromeetienne/ar.js/master/three.js/';
-    </script>
     <script>
         AFRAME.registerComponent('waypoints', {
             init: function () {
@@ -17,23 +14,43 @@
                 const routeId = params.get('routeId');
                 if (routeId) {
                     this.loadWaypoints(routeId);
+                } else {
+                    //For testing: use current location
+                    this.loadTestWaypoints();
                 }
             },
             loadWaypoints: function (routeId) {
                 fetch(`http://localhost:3000/get-waypoints/${routeId}`)
                     .then(response => response.json())
-                    .then(waypoints => {
-                        waypoints.forEach((waypoint) => {
-                            const entity = document.createElement('a-image');
-                            entity.setAttribute('src', './assets/arrow.jpeg');
-                            entity.setAttribute('gps-entity-place', `longitude: ${waypoint.longitude}; latitude: ${waypoint.latitude};`);
-                            entity.setAttribute('rotation', '-90 0 0');  // Rotate image to lie flat on the ground
-                            entity.setAttribute('width', '3');  // Adjust size as needed
-                            entity.setAttribute('height', '3');
-                            this.el.sceneEl.appendChild(entity);
-                        });
-                    })
+                    .then(waypoints => this.createArrows(waypoints))
                     .catch(error => console.error('Error loading waypoints:', error));
+            },
+            loadTestWaypoints: function () {
+                if ("geolocation" in navigator) {
+                    navigator.geolocation.getCurrentPosition((position) => {
+                        const currentLat = position.coords.latitude;
+                        const currentLon = position.coords.longitude;
+                        const testWaypoints = [
+                            { latitude: currentLat + -6.766392, longitude: currentLon + 39.214103 },
+                            { latitude: currentLat + -6.766292, longitude: currentLon + 39.214203 },
+                            { latitude: currentLat + -6.766192, longitude: currentLon + 39.214303 }
+                        ];
+                        this.createArrows(testWaypoints);
+                    });
+                }
+            },
+            createArrows: function (waypoints) {
+                waypoints.forEach((waypoint, index) => {
+                    const entity = document.createElement('a-image');
+                    entity.setAttribute('src', 'assets/arrow2.png');  // Make sure this path is correct
+                    entity.setAttribute('gps-entity-place', `latitude: ${waypoint.latitude}; longitude: ${waypoint.longitude};`);
+                    entity.setAttribute('look-at', '[gps-camera]');
+                    entity.setAttribute('scale', '5 5 5');  // Adjust size as needed
+                    entity.setAttribute('id', `waypoint-${index}`);
+                    this.el.sceneEl.appendChild(entity);
+
+                    console.log(`Added waypoint ${index} at lat: ${waypoint.latitude}, lon: ${waypoint.longitude}`);
+                });
             }
         });
     </script>
@@ -43,7 +60,7 @@
     <a-scene
         vr-mode-ui="enabled: false"
         embedded
-        arjs='sourceType: webcam; sourceWidth:1280; sourceHeight:960; displayWidth: 1280; displayHeight: 960; debugUIEnabled: false;'
+        arjs='sourceType: webcam; videoTexture: true; debugUIEnabled: false;'
         waypoints>
         
         <a-camera gps-camera rotation-reader></a-camera>
