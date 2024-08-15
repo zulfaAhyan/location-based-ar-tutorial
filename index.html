@@ -1,15 +1,46 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>AR.js A-Frame Location-based</title>
-<script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
-<script type='text/javascript' src='https://raw.githack.com/AR-js-org/AR.js/master/three.js/build/ar-threex-location-only.js'></script>
-<script type='text/javascript' src='https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js'></script>
+    <title>AR.js A-Frame Location-based (Southern Hemisphere Fix)</title>
+    <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
+    <script src='https://raw.githack.com/AR-js-org/AR.js/master/three.js/build/ar-threex-location-only.js'></script>
+    <script src='https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js'></script>
+    <script>
+        AFRAME.registerComponent('southern-hemisphere-fix', {
+            init: function () {
+                var el = this.el;
+                var originalLatitude = el.getAttribute('gps-new-entity-place').latitude;
+                var longitude = el.getAttribute('gps-new-entity-place').longitude;
+                
+                // Convert negative latitude to positive
+                var positiveLatitude = Math.abs(originalLatitude);
+                
+                el.setAttribute('gps-new-entity-place', {
+                    latitude: positiveLatitude,
+                    longitude: longitude
+                });
+                
+                console.log('Applied Southern Hemisphere fix. Original lat:', originalLatitude, 'New lat:', positiveLatitude);
+            }
+        });
+    </script>
 </head>
 <body>
-<a-scene vr-mode-ui='enabled: false' arjs='sourceType: webcam; videoTexture: true; debugUIEnabled: false' renderer='antialias: true; alpha: true'>
-    <a-camera gps-new-camera='gpsMinDistance: 5'></a-camera>
-    <a-entity material='color: red' geometry='primitive: box' gps-new-entity-place="latitude: -6.767077; longitude: 39.214003" scale="10 10 10"></a-entity>
-</a-scene>
+    <a-scene vr-mode-ui='enabled: false' arjs='sourceType: webcam; videoTexture: true; debugUIEnabled: true' renderer='antialias: true; alpha: true'>
+        <a-camera gps-new-camera='gpsMinDistance: 5'></a-camera>
+        <a-entity 
+            material='color: red' 
+            geometry='primitive: box' 
+            gps-new-entity-place="latitude: -6.767077; longitude: 39.214003" 
+            scale="10 10 10"
+            southern-hemisphere-fix>
+        </a-entity>
+    </a-scene>
+    <script>
+        // Log when GPS position is updated
+        window.addEventListener('gps-camera-update-position', e => {
+            console.log('GPS position updated:', e.detail.position.latitude, e.detail.position.longitude);
+        });
+    </script>
 </body>
 </html>
