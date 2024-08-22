@@ -61,6 +61,13 @@
             document.body.appendChild(renderer.domElement);
             debugLog('Three.js scene created');
 
+            const geometry = new THREE.BoxGeometry(0.1, 0.1, 0.1);
+            const material = new THREE.MeshBasicMaterial({color: 0x00ff00});
+            const cube = new THREE.Mesh(geometry, material);
+            cube.position.set(0, 0, -1);
+            scene.add(cube);
+            debugLog('Added test cube to scene');
+
             // Load the 3D model
             const loader = new THREE.GLTFLoader();
             loader.load('./assets/magnemite/scene.gltf', (gltf) => {
