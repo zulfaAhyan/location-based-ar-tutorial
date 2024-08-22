@@ -17,29 +17,49 @@
             padding: 10px 20px;
             font-size: 18px;
         }
+        #debug {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background: rgba(0,0,0,0.5);
+            padding: 10px;
+        }
     </style>
 </head>
 <body>
     <button id="start-ar">Start AR Experience</button>
+    <div id="debug"></div>
     <script>
+        let scene, camera, renderer;
+
+        function debugLog(message) {
+            console.log(message);
+            document.getElementById('debug').innerHTML += message + '<br>';
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
+            debugLog('DOM loaded');
             const startARButton = document.getElementById('start-ar');
             startARButton.addEventListener('click', initializeAR);
         });
 
         async function initializeAR() {
+            debugLog('initializeAR called');
             const startARButton = document.getElementById('start-ar');
             startARButton.style.display = 'none';
 
             // Initialize the WebXR polyfill
             const polyfill = new WebXRPolyfill();
+            debugLog('WebXR polyfill initialized');
             
             // Create a Three.js scene
-            const scene = new THREE.Scene();
-            const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            const renderer = new THREE.WebGLRenderer({ antialias: true });
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             document.body.appendChild(renderer.domElement);
+            debugLog('Three.js scene created');
 
             // Load the 3D model
             const loader = new THREE.GLTFLoader();
@@ -49,38 +69,48 @@
                 model.rotation.y = Math.PI;
                 model.name = 'magnemite';
                 scene.add(model);
+                debugLog('3D model loaded');
+            }, undefined, (error) => {
+                debugLog('Error loading 3D model: ' + error);
             });
 
             // Check if WebXR is supported
             if (navigator.xr) {
+                debugLog('WebXR is supported');
                 try {
                     const supported = await navigator.xr.isSessionSupported('immersive-ar');
                     if (supported) {
+                        debugLog('immersive-ar is supported');
                         const session = await navigator.xr.requestSession('immersive-ar', {
                             requiredFeatures: ['local-floor', 'bounded-floor']
                         });
+                        debugLog('AR session created');
                         
                         session.addEventListener('end', () => {
+                            debugLog('AR session ended');
                             renderer.xr.setSession(null);
                         });
                         
                         renderer.xr.setSession(session);
+                        debugLog('Renderer XR session set');
                         const referenceSpace = await session.requestReferenceSpace('local-floor');
+                        debugLog('Reference space created');
                         
                         handleUserInteraction();
                         animate(session, referenceSpace);
                     } else {
-                        console.log('AR not supported on this device');
+                        debugLog('AR not supported on this device');
                     }
                 } catch (error) {
-                    console.error('Error starting WebXR session:', error);
+                    debugLog('Error starting WebXR session: ' + error);
                 }
             } else {
-                console.log('WebXR not available in this browser');
+                debugLog('WebXR not available in this browser');
             }
         }
 
         function handleUserInteraction() {
+            debugLog('handleUserInteraction called');
             if (navigator.geolocation) {
                 navigator.geolocation.getCurrentPosition((position) => {
                     const longitude = position.coords.longitude;
@@ -89,29 +119,33 @@
                     const routeId = urlParams.get('routeId');
                     
                     if (!routeId) {
-                        console.error('No route ID provided');
+                        debugLog('No route ID provided');
                         return;
                     }
 
+                    debugLog('Fetching waypoints for route: ' + routeId);
                     fetch(`https://your-server-url.com/get-waypoints/${routeId}`)
                         .then(response => response.json())
                         .then(waypoints => {
+                            debugLog('Waypoints received: ' + waypoints.length);
                             waypoints.forEach((waypoint) => {
                                 const model = scene.getObjectByName('magnemite').clone();
                                 model.position.set(waypoint.longitude - longitude, waypoint.latitude - latitude, 0);
                                 scene.add(model);
+                                debugLog('Model added at: ' + model.position.toArray());
                             });
                         })
-                        .catch(error => console.error('Error loading waypoints:', error));
+                        .catch(error => debugLog('Error loading waypoints: ' + error));
                 }, (error) => {
-                    console.error('Error getting user location:', error);
+                    debugLog('Error getting user location: ' + error);
                 });
             } else {
-                console.error('Geolocation is not supported by this browser.');
+                debugLog('Geolocation is not supported by this browser.');
             }
         }
 
         function animate(session, referenceSpace) {
+            debugLog('Animation started');
             const render = () => {
                 session.requestAnimationFrame(render);
                 renderer.render(scene, camera);
