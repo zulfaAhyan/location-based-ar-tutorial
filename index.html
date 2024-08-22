@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0" />
     <title>WebXR AR Demo</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/webxr-polyfill@2.0.2/build/webxr-polyfill.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
     <style>
@@ -48,6 +49,10 @@
             const startARButton = document.getElementById('start-ar');
             startARButton.style.display = 'none';
 
+            // Initialize the WebXR polyfill
+            const polyfill = new WebXRPolyfill();
+            debugLog('WebXR polyfill initialized');
+            
             // Create a Three.js scene
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -77,7 +82,7 @@
                     if (supported) {
                         debugLog('immersive-ar is supported');
                         const session = await navigator.xr.requestSession('immersive-ar', {
-                            optionalFeatures: ['local-floor', 'bounded-floor']
+                            requiredFeatures: ['local-floor', 'bounded-floor']
                         });
                         debugLog('AR session created');
                         
@@ -97,8 +102,7 @@
                         debugLog('AR not supported on this device');
                     }
                 } catch (error) {
-                    debugLog('Error starting WebXR session: ' + error.name + ' - ' + error.message);
-                    console.error(error);
+                    debugLog('Error starting WebXR session: ' + error);
                 }
             } else {
                 debugLog('WebXR not available in this browser');
