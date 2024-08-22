@@ -10,10 +10,11 @@
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 </head>
 <body>
+    <button id="start-ar">Start AR</button>
     <script>
         // Initialize the WebXR polyfill
         const polyfill = new WebXRPolyfill();
-
+        
         // Create a Three.js scene
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -31,24 +32,33 @@
             const model = gltf.scene;
             model.scale.set(0.15, 0.15, 0.15);
             model.rotation.y = Math.PI;
+            model.name = 'magnemite';
             scene.add(model);
         });
 
         // Function to handle user interaction
-        function handleUserInteraction(event) {
+        function handleUserInteraction() {
             // Get the user's location
             if (navigator.geolocation) {
                 navigator.geolocation.getCurrentPosition((position) => {
                     // Fetch the waypoints from the server
                     const longitude = position.coords.longitude;
                     const latitude = position.coords.latitude;
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const routeId = urlParams.get('routeId');
+                    
+                    if (!routeId) {
+                        console.error('No route ID provided');
+                        return;
+                    }
+
                     fetch(`http://localhost:3000/get-waypoints/${routeId}`)
                         .then(response => response.json())
                         .then(waypoints => {
                             waypoints.forEach((waypoint) => {
                                 // Place the 3D model at the waypoint location
-                                const model = scene.getObjectByName('magnemite');
-                                model.position.set(waypoint.longitude, waypoint.latitude, 0);
+                                const model = scene.getObjectByName('magnemite').clone();
+                                model.position.set(waypoint.longitude - longitude, waypoint.latitude - latitude, 0);
                                 scene.add(model);
                             });
                         })
@@ -62,32 +72,52 @@
         }
 
         // Set up the WebXR session
-        navigator.xr.requestSession('immersive-ar', {
-            requiredFeatures: ['local-floor', 'bounded-floor']
-        }).then((session) => {
-            xrSession = session;
-            xrSession.addEventListener('end', () => {
-                renderer.xr.setSession(null);
-            });
-
-            renderer.xr.setSession(xrSession);
-
-            xrSession.requestReferenceSpace('local-floor').then((referenceSpace) => {
-                xrReferenceSpace = referenceSpace;
-                animate();
-            });
-        }).catch((error) => {
-            console.error('Error starting WebXR session:', error);
-        });
+        async function startAR() {
+            if (navigator.xr) {
+                try {
+                    const supported = await navigator.xr.isSessionSupported('immersive-ar');
+                    if (supported) {
+                        xrSession = await navigator.xr.requestSession('immersive-ar', {
+                            requiredFeatures: ['local-floor', 'bounded-floor']
+                        });
+                        
+                        xrSession.addEventListener('end', () => {
+                            renderer.xr.setSession(null);
+                        });
+                        
+                        renderer.xr.setSession(xrSession);
+                        xrReferenceSpace = await xrSession.requestReferenceSpace('local-floor');
+                        
+                        handleUserInteraction();
+                        animate();
+                    } else {
+                        console.log('AR not supported on this device');
+                    }
+                } catch (error) {
+                    console.error('Error starting WebXR session:', error);
+                }
+            } else {
+                console.log('WebXR not available in this browser');
+            }
+        }
 
         // Animation loop
         function animate() {
-            xrSession.requestAnimationFrame(animate);
-            renderer.render(scene, camera);
+            if (xrSession) {
+                xrSession.requestAnimationFrame(animate);
+                renderer.render(scene, camera);
+            }
         }
 
         // Handle user interaction
-        window.addEventListener('click', handleUserInteraction);
+        document.getElementById('start-ar').addEventListener('click', startAR);
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
     </script>
 </body>
 </html>
