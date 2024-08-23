@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0" />
     <title>WebXR AR Demo</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/webxr-polyfill@2.0.2/build/webxr-polyfill.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
     <style>
@@ -31,7 +30,7 @@
     <button id="start-ar">Start AR Experience</button>
     <div id="debug"></div>
     <script>
-        let scene, camera, renderer;
+        let scene, camera, renderer, session;
 
         function debugLog(message) {
             console.log(message);
@@ -49,10 +48,6 @@
             const startARButton = document.getElementById('start-ar');
             startARButton.style.display = 'none';
 
-            // Initialize the WebXR polyfill
-            const polyfill = new WebXRPolyfill();
-            debugLog('WebXR polyfill initialized');
-            
             // Create a Three.js scene
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -83,30 +78,39 @@
             });
 
             // Check if WebXR is supported
-            if (navigator.xr) {
+            if ('xr' in navigator) {
                 debugLog('WebXR is supported');
                 try {
+                    // Request camera permission
+                    await navigator.mediaDevices.getUserMedia({video: true});
+                    debugLog('Camera permission granted');
+
                     const supported = await navigator.xr.isSessionSupported('immersive-ar');
                     if (supported) {
                         debugLog('immersive-ar is supported');
                         try {
-                            const session = await navigator.xr.requestSession('immersive-ar');
+                            session = await navigator.xr.requestSession('immersive-ar', {
+                                requiredFeatures: ['hit-test']
+                            });
                             debugLog('AR session created');
                             
                             session.addEventListener('end', () => {
                                 debugLog('AR session ended');
+                                session = null;
                                 renderer.xr.setSession(null);
                             });
                             
                             renderer.xr.setSession(session);
                             debugLog('Renderer XR session set');
+
                             const referenceSpace = await session.requestReferenceSpace('local');
                             debugLog('Reference space created');
                             
                             handleUserInteraction();
-                            animate(session, referenceSpace);
+                            renderer.setAnimationLoop(() => render(referenceSpace));
                         } catch (error) {
-                            debugLog('Error starting AR session: ' + error);
+                            debugLog('Error starting AR session: ' + error.name + ' - ' + error.message);
+                            console.error('Full AR session error:', error);
                             initializeFallbackExperience();
                         }
                     } else {
@@ -125,29 +129,22 @@
 
         function initializeFallbackExperience() {
             debugLog('Initializing fallback non-AR experience');
-            // Set up basic camera position
             camera.position.z = 5;
 
-            // Set up basic camera controls for non-AR view
             const controls = new THREE.OrbitControls(camera, renderer.domElement);
             controls.target.set(0, 0, 0);
             controls.update();
 
-            // Start a basic animation loop
-            function animate() {
-                requestAnimationFrame(animate);
+            handleUserInteraction();
+            renderer.setAnimationLoop(() => {
                 controls.update();
                 renderer.render(scene, camera);
-            }
-            animate();
-
-            // Proceed with fetching waypoints and adding models
-            handleUserInteraction();
+            });
         }
 
         function handleUserInteraction() {
             debugLog('handleUserInteraction called');
-            if (navigator.geolocation) {
+            if ('geolocation' in navigator) {
                 navigator.geolocation.getCurrentPosition((position) => {
                     const longitude = position.coords.longitude;
                     const latitude = position.coords.latitude;
@@ -160,8 +157,13 @@
                     }
 
                     debugLog('Fetching waypoints for route: ' + routeId);
-                    fetch(`http://192.168.131.100:3000/get-waypoints/${routeId}`)
-                        .then(response => response.json())
+                    fetch(https://192.168.131.100/get-waypoints/${routeId})
+                        .then(response => {
+                            if (!response.ok) {
+                                throw new Error(HTTP error! status: ${response.status});
+                            }
+                            return response.json();
+                        })
                         .then(waypoints => {
                             debugLog('Waypoints received: ' + waypoints.length);
                             waypoints.forEach((waypoint) => {
@@ -171,7 +173,10 @@
                                 debugLog('Model added at: ' + model.position.toArray());
                             });
                         })
-                        .catch(error => debugLog('Error loading waypoints: ' + error));
+                        .catch(error => {
+                            debugLog('Error loading waypoints: ' + error.message);
+                            console.error('Full error:', error);
+                        });
                 }, (error) => {
                     debugLog('Error getting user location: ' + error);
                 });
@@ -180,13 +185,23 @@
             }
         }
 
-        function animate(session, referenceSpace) {
-            debugLog('Animation started');
-            const render = () => {
-                session.requestAnimationFrame(render);
+        function render(referenceSpace) {
+            if (session) {
+                session.requestAnimationFrame((time, frame) => {
+                    const pose = frame.getViewerPose(referenceSpace);
+                    if (pose) {
+                        const view = pose.views[0];
+                        const viewport = session.renderState.baseLayer.getViewport(view);
+                        renderer.setSize(viewport.width, viewport.height);
+                        camera.matrix.fromArray(view.transform.matrix);
+                        camera.projectionMatrix.fromArray(view.projectionMatrix);
+                        camera.updateMatrixWorld(true);
+                    }
+                    renderer.render(scene, camera);
+                });
+            } else {
                 renderer.render(scene, camera);
-            };
-            render();
+            }
         }
 
         window.addEventListener('resize', () => {
