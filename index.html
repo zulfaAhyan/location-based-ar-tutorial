@@ -160,7 +160,7 @@
                     }
 
                     debugLog('Fetching waypoints for route: ' + routeId);
-                    fetch(`http://localhost:3000/get-waypoints/${routeId}`)
+                    fetch(`http://192.168.131.100:3000/get-waypoints/${routeId}`)
                         .then(response => response.json())
                         .then(waypoints => {
                             debugLog('Waypoints received: ' + waypoints.length);
