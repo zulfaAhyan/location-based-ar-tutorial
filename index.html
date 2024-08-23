@@ -123,7 +123,6 @@
             }
         }
 
-
         function initializeFallbackExperience() {
             debugLog('Initializing fallback non-AR experience');
             // Set up basic camera position
@@ -161,7 +160,7 @@
                     }
 
                     debugLog('Fetching waypoints for route: ' + routeId);
-                    fetch(https://your-server-url.com/get-waypoints/${routeId})
+                    fetch(`http://localhost:3000/get-waypoints/${routeId}`)
                         .then(response => response.json())
                         .then(waypoints => {
                             debugLog('Waypoints received: ' + waypoints.length);
