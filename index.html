@@ -124,7 +124,7 @@
                     }
 
                     debugLog('Fetching waypoints for route: ' + routeId);
-                    fetch(https://http://localhost:3000/get-waypoints/${routeId})
+                    fetch('http://localhost:3000/get-waypoints/${routeId}')
                         .then(response => response.json())
                         .then(waypoints => {
                             debugLog('Waypoints received: ' + waypoints.length);
