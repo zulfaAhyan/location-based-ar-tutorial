@@ -1,214 +1,26 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset='utf-8'>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0" />
-    <title>WebXR AR Demo</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
-    <style>
-        #start-ar {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            padding: 10px 20px;
-            font-size: 18px;
-        }
-        #debug {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            color: white;
-            background: rgba(0,0,0,0.5);
-            padding: 10px;
-        }
-    </style>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebXR AR Test</title>
 </head>
 <body>
-    <button id="start-ar">Start AR Experience</button>
-    <div id="debug"></div>
+    <div id="info"></div>
     <script>
-        let scene, camera, renderer, session;
-
-        function debugLog(message) {
+        function log(message) {
             console.log(message);
-            document.getElementById('debug').innerHTML += message + '<br>';
+            document.getElementById('info').innerHTML += message + '<br>';
         }
 
-        document.addEventListener('DOMContentLoaded', () => {
-            debugLog('DOM loaded');
-            const startARButton = document.getElementById('start-ar');
-            startARButton.addEventListener('click', initializeAR);
-        });
-
-        async function initializeAR() {
-            debugLog('initializeAR called');
-            const startARButton = document.getElementById('start-ar');
-            startARButton.style.display = 'none';
-
-            // Create a Three.js scene
-            scene = new THREE.Scene();
-            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            document.body.appendChild(renderer.domElement);
-            debugLog('Three.js scene created');
-
-            // Add a simple cube to the scene
-            const geometry = new THREE.BoxGeometry(0.1, 0.1, 0.1);
-            const material = new THREE.MeshBasicMaterial({color: 0x00ff00});
-            const cube = new THREE.Mesh(geometry, material);
-            cube.position.set(0, 0, -1);
-            scene.add(cube);
-            debugLog('Added test cube to scene');
-
-            // Load the 3D model
-            const loader = new THREE.GLTFLoader();
-            loader.load('./assets/magnemite/scene.gltf', (gltf) => {
-                const model = gltf.scene;
-                model.scale.set(0.15, 0.15, 0.15);
-                model.rotation.y = Math.PI;
-                model.name = 'magnemite';
-                scene.add(model);
-                debugLog('3D model loaded');
-            }, undefined, (error) => {
-                debugLog('Error loading 3D model: ' + error);
-            });
-
-            // Check if WebXR is supported
-            if ('xr' in navigator) {
-                debugLog('WebXR is supported');
-                try {
-                    // Request camera permission
-                    await navigator.mediaDevices.getUserMedia({video: true});
-                    debugLog('Camera permission granted');
-
-                    const supported = await navigator.xr.isSessionSupported('immersive-ar');
-                    if (supported) {
-                        debugLog('immersive-ar is supported');
-                        try {
-                            session = await navigator.xr.requestSession('immersive-ar', {
-                                requiredFeatures: ['hit-test']
-                            });
-                            debugLog('AR session created');
-                            
-                            session.addEventListener('end', () => {
-                                debugLog('AR session ended');
-                                session = null;
-                                renderer.xr.setSession(null);
-                            });
-                            
-                            renderer.xr.setSession(session);
-                            debugLog('Renderer XR session set');
-
-                            const referenceSpace = await session.requestReferenceSpace('local');
-                            debugLog('Reference space created');
-                            
-                            handleUserInteraction();
-                            renderer.setAnimationLoop(() => render(referenceSpace));
-                        } catch (error) {
-                            debugLog('Error starting AR session: ' + error.name + ' - ' + error.message);
-                            console.error('Full AR session error:', error);
-                            initializeFallbackExperience();
-                        }
-                    } else {
-                        debugLog('AR not supported on this device');
-                        initializeFallbackExperience();
-                    }
-                } catch (error) {
-                    debugLog('Error checking AR support: ' + error);
-                    initializeFallbackExperience();
-                }
-            } else {
-                debugLog('WebXR not available in this browser');
-                initializeFallbackExperience();
-            }
+        if ('xr' in navigator) {
+            log('WebXR is supported');
+            navigator.xr.isSessionSupported('immersive-ar')
+                .then(supported => log('AR supported: ' + supported))
+                .catch(err => log('Error checking AR support: ' + err));
+        } else {
+            log('WebXR is not supported');
         }
-
-        function initializeFallbackExperience() {
-            debugLog('Initializing fallback non-AR experience');
-            camera.position.z = 5;
-
-            const controls = new THREE.OrbitControls(camera, renderer.domElement);
-            controls.target.set(0, 0, 0);
-            controls.update();
-
-            handleUserInteraction();
-            renderer.setAnimationLoop(() => {
-                controls.update();
-                renderer.render(scene, camera);
-            });
-        }
-
-        function handleUserInteraction() {
-            debugLog('handleUserInteraction called');
-            if ('geolocation' in navigator) {
-                navigator.geolocation.getCurrentPosition((position) => {
-                    const longitude = position.coords.longitude;
-                    const latitude = position.coords.latitude;
-                    const urlParams = new URLSearchParams(window.location.search);
-                    const routeId = urlParams.get('routeId');
-                    
-                    if (!routeId) {
-                        debugLog('No route ID provided');
-                        return;
-                    }
-
-                    debugLog('Fetching waypoints for route: ' + routeId);
-                    fetch(`http://192.168.131.100:3000/get-waypoints/${routeId}`)
-                        .then(response => {
-                            if (!response.ok) {
-                                throw new Error(`HTTP error! status: ${response.status}`);
-                            }
-                            return response.json();
-                        })
-                        .then(waypoints => {
-                            debugLog('Waypoints received: ' + waypoints.length);
-                            waypoints.forEach((waypoint) => {
-                                const model = scene.getObjectByName('magnemite').clone();
-                                model.position.set(waypoint.longitude - longitude, waypoint.latitude - latitude, 0);
-                                scene.add(model);
-                                debugLog('Model added at: ' + model.position.toArray());
-                            });
-                        })
-                        .catch(error => {
-                            debugLog('Error loading waypoints: ' + error.message);
-                            console.error('Full error:', error);
-                        });
-                }, (error) => {
-                    debugLog('Error getting user location: ' + error);
-                });
-            } else {
-                debugLog('Geolocation is not supported by this browser.');
-            }
-        }
-
-        function render(referenceSpace) {
-            if (session) {
-                session.requestAnimationFrame((time, frame) => {
-                    const pose = frame.getViewerPose(referenceSpace);
-                    if (pose) {
-                        const view = pose.views[0];
-                        const viewport = session.renderState.baseLayer.getViewport(view);
-                        renderer.setSize(viewport.width, viewport.height);
-                        camera.matrix.fromArray(view.transform.matrix);
-                        camera.projectionMatrix.fromArray(view.projectionMatrix);
-                        camera.updateMatrixWorld(true);
-                    }
-                    renderer.render(scene, camera);
-                });
-            } else {
-                renderer.render(scene, camera);
-            }
-        }
-
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
     </script>
 </body>
 </html>
