@@ -61,6 +61,14 @@
             document.body.appendChild(renderer.domElement);
             debugLog('Three.js scene created');
 
+            // Add a simple cube to the scene
+            const geometry = new THREE.BoxGeometry(0.1, 0.1, 0.1);
+            const material = new THREE.MeshBasicMaterial({color: 0x00ff00});
+            const cube = new THREE.Mesh(geometry, material);
+            cube.position.set(0, 0, -1);
+            scene.add(cube);
+            debugLog('Added test cube to scene');
+
             // Load the 3D model
             const loader = new THREE.GLTFLoader();
             loader.load('./assets/magnemite/scene.gltf', (gltf) => {
@@ -81,32 +89,61 @@
                     const supported = await navigator.xr.isSessionSupported('immersive-ar');
                     if (supported) {
                         debugLog('immersive-ar is supported');
-                        const session = await navigator.xr.requestSession('immersive-ar', {
-                            requiredFeatures: ['local-floor', 'bounded-floor']
-                        });
-                        debugLog('AR session created');
-                        
-                        session.addEventListener('end', () => {
-                            debugLog('AR session ended');
-                            renderer.xr.setSession(null);
-                        });
-                        
-                        renderer.xr.setSession(session);
-                        debugLog('Renderer XR session set');
-                        const referenceSpace = await session.requestReferenceSpace('local-floor');
-                        debugLog('Reference space created');
-                        
-                        handleUserInteraction();
-                        animate(session, referenceSpace);
+                        try {
+                            const session = await navigator.xr.requestSession('immersive-ar');
+                            debugLog('AR session created');
+                            
+                            session.addEventListener('end', () => {
+                                debugLog('AR session ended');
+                                renderer.xr.setSession(null);
+                            });
+                            
+                            renderer.xr.setSession(session);
+                            debugLog('Renderer XR session set');
+                            const referenceSpace = await session.requestReferenceSpace('local');
+                            debugLog('Reference space created');
+                            
+                            handleUserInteraction();
+                            animate(session, referenceSpace);
+                        } catch (error) {
+                            debugLog('Error starting AR session: ' + error);
+                            initializeFallbackExperience();
+                        }
                     } else {
                         debugLog('AR not supported on this device');
+                        initializeFallbackExperience();
                     }
                 } catch (error) {
-                    debugLog('Error starting WebXR session: ' + error);
+                    debugLog('Error checking AR support: ' + error);
+                    initializeFallbackExperience();
                 }
             } else {
                 debugLog('WebXR not available in this browser');
+                initializeFallbackExperience();
             }
+        }
+
+
+        function initializeFallbackExperience() {
+            debugLog('Initializing fallback non-AR experience');
+            // Set up basic camera position
+            camera.position.z = 5;
+
+            // Set up basic camera controls for non-AR view
+            const controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.target.set(0, 0, 0);
+            controls.update();
+
+            // Start a basic animation loop
+            function animate() {
+                requestAnimationFrame(animate);
+                controls.update();
+                renderer.render(scene, camera);
+            }
+            animate();
+
+            // Proceed with fetching waypoints and adding models
+            handleUserInteraction();
         }
 
         function handleUserInteraction() {
@@ -124,7 +161,7 @@
                     }
 
                     debugLog('Fetching waypoints for route: ' + routeId);
-                    fetch(`https://http://localhost:3000/get-waypoints/${routeId}`)
+                    fetch(https://your-server-url.com/get-waypoints/${routeId})
                         .then(response => response.json())
                         .then(waypoints => {
                             debugLog('Waypoints received: ' + waypoints.length);
