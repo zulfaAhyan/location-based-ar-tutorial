@@ -157,10 +157,10 @@
                     }
 
                     debugLog('Fetching waypoints for route: ' + routeId);
-                    fetch(https://192.168.131.100/get-waypoints/${routeId})
+                    fetch(`https://192.168.131.100/get-waypoints/${routeId}`)
                         .then(response => {
                             if (!response.ok) {
-                                throw new Error(HTTP error! status: ${response.status});
+                                throw new Error(`HTTP error! status: ${response.status}`);
                             }
                             return response.json();
                         })
