@@ -26,7 +26,7 @@
             });
         </script>
     </head>
-    <body style="margin: 0; overflow: hidden;">
+   <body style="margin: 0; overflow: hidden;">
         <a-scene
             vr-mode-ui="enabled: false"
             arjs="sourceType: webcam; videoTexture: true; debugUIEnabled: false;"
@@ -36,8 +36,8 @@
                     src="assets/arrow3.png"
                     look-at="[gps-camera]"
                     scale="1 1 1"
-                    gps-entity-place="latitude: -6.761643; longitude: 39.193781;"
-                    southern-hemisphere-fix
+                    gps-entity-place="latitude: -6.7616; longitude: 39.1938;"
+                    id="targetImage"
                 ></a-image>
             <a-camera gps-camera rotation-reader></a-camera>
         </a-scene>
@@ -47,11 +47,15 @@
         <script>
             // Debugging
             const debugEl = document.getElementById('debug');
+            const targetImage = document.getElementById('targetImage');
             window.addEventListener('gps-camera-update-position', e => {
                 const cameraLat = e.detail.position.latitude;
                 const cameraLon = e.detail.position.longitude;
-                const distanceMsg = document.querySelector('a-image').getAttribute('distance');
-                debugEl.textContent = `Camera: ${cameraLat.toFixed(6)}, ${cameraLon.toFixed(6)} (Dist: ${distanceMsg})`;
+                const imageEl = document.querySelector('a-image');
+                const distanceMsg = imageEl.getAttribute('distance');
+                const imageLat = imageEl.getAttribute('gps-entity-place').latitude;
+                const imageLon = imageEl.getAttribute('gps-entity-place').longitude;
+                debugEl.textContent = Camera: ${cameraLat.toFixed(6)}, ${cameraLon.toFixed(6)} | Image: ${imageLat}, ${imageLon} | Distance: ${distanceMsg};
             });
         </script>
     </body>
