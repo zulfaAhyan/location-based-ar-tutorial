@@ -13,6 +13,12 @@
             arjs="sourceType: webcam; videoTexture: true; debugUIEnabled: true;"
             renderer="antialias: true; alpha: true"
             embedded>
+            <a-image
+                src="assets/arrow3.png"
+                look-at="[gps-camera]"
+                scale="120 120 120"
+                gps-entity-place="latitude: -6.7615; longitude: 39.1937; minDistance: 0;"
+            ></a-image>
             <a-box color="red" position="0 0 -5"></a-box>
             <a-camera gps-camera rotation-reader></a-camera>
         </a-scene>
