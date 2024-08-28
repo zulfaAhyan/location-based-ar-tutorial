@@ -40,10 +40,10 @@
                     try {
                         const latitude = e.detail.position.latitude;
                         const longitude = e.detail.position.longitude;
-                        debugDiv.textContent = Current GPS: lat ${latitude.toFixed(6)}, lon ${longitude.toFixed(6)};
+                        debugDiv.textContent = 'Current GPS: lat ' + latitude.toFixed(6) + ', lon ' + longitude.toFixed(6);
                         
                         if (boxEl.getAttribute('distance')) {
-                            debugDiv.textContent += \nDistance to box: ${boxEl.getAttribute('distance').toFixed(2)} meters;
+                            debugDiv.textContent += '\nDistance to box: ' + boxEl.getAttribute('distance').toFixed(2) + ' meters';
                         }
                     } catch (error) {
                         debugDiv.textContent += '\nError in GPS update: ' + error.message;
