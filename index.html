@@ -43,12 +43,20 @@
                 updateDebugInfo('Page loaded. Waiting for GPS data...');
             });
 
-
+            
             window.addEventListener('gps-camera-update-position', e => {
+                console.log('GPS event received:', e);
                 const cameraLat = e.detail.position.latitude;
                 const cameraLon = e.detail.position.longitude;
-                const distanceMsg = document.querySelector('a-image').getAttribute('distance');
-                debugEl.textContent = 'Camera: ' + cameraLat.toFixed(6) + ', ' + cameraLon.toFixed(6) + ' (Dist: ' + distanceMsg + ')';
+                console.log('Camera position:', cameraLat, cameraLon);
+                
+                const imageEl = document.querySelector('a-image');
+                console.log('Image element:', imageEl);
+                
+                const distanceMsg = imageEl ? imageEl.getAttribute('distance') : 'N/A';
+                console.log('Distance:', distanceMsg);
+                
+                debugEl.textContent = Camera: ${cameraLat.toFixed(6)}, ${cameraLon.toFixed(6)} (Dist: ${distanceMsg});
             });
             
             // Additional error handling
