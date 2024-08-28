@@ -64,6 +64,11 @@
                 console.error('Caught error:', event.error);
                 updateDebugInfo('An error occurred. Check console for details.');
             });
+
+            document.querySelector('a-image').addEventListener('error', function (evt) {
+                console.error('Error loading image:', evt);
+            });
+
         </script>
     </body>
 </html>
