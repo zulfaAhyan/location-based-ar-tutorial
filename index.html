@@ -4,6 +4,10 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AR GPS Location Based</title>
+    <script>
+    // Three.js compatibility fix
+    window.PlaneBufferGeometry = window.PlaneGeometry;
+    </script>
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <script src="https://unpkg.com/aframe-look-at-component@0.8.0/dist/aframe-look-at-component.min.js"></script>
     <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar-nft.js"></script>
@@ -57,9 +61,14 @@
 
     <script>
     (function() {
-        // Handle deprecation warning
-        if (THREE.PlaneBufferGeometry && !THREE.PlaneGeometry) {
-            THREE.PlaneGeometry = THREE.PlaneBufferGeometry;
+        // Ensure THREE is defined
+        if (typeof THREE !== 'undefined') {
+            // Handle deprecation
+            if (THREE.PlaneBufferGeometry && !THREE.PlaneGeometry) {
+                THREE.PlaneGeometry = THREE.PlaneBufferGeometry;
+            } else if (!THREE.PlaneBufferGeometry && THREE.PlaneGeometry) {
+                THREE.PlaneBufferGeometry = THREE.PlaneGeometry;
+            }
         }
 
         // Debounce function
