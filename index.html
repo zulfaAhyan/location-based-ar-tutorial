@@ -42,8 +42,14 @@
     <a-scene
         vr-mode-ui="enabled: false"
         arjs="sourceType: webcam; videoTexture: true; debugUIEnabled: false;"
-        renderer="antialias: true; alpha: true"
+        renderer="antialias: true; alpha: true; physicallyCorrectLights: true;"
         embedded>
+        
+        <!-- Lighting -->
+        <a-light type="directional" color="#ffffff" intensity="1" position="1 1 1"></a-light>
+        <a-light type="ambient" color="#888888"></a-light>
+
+        <!-- AR Box -->
         <a-box
             id="arBox"
             color="red"
@@ -51,6 +57,7 @@
             gps-entity-place="latitude: -6.761643; longitude: 39.193781;"
             look-at="[gps-camera]">
         </a-box>
+        
         <a-camera gps-camera rotation-reader></a-camera>
     </a-scene>
     <div id="debugDiv">Initializing AR scene...</div>
