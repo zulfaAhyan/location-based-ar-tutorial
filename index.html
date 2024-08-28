@@ -52,7 +52,7 @@
                     const distanceMsg = imageEl.getAttribute('distance');
                     const imageLat = imageEl.getAttribute('gps-entity-place').latitude;
                     const imageLon = imageEl.getAttribute('gps-entity-place').longitude;
-                    const debugInfo = Camera: ${cameraLat.toFixed(6)}, ${cameraLon.toFixed(6)} | Image: ${imageLat}, ${imageLon} | Distance: ${distanceMsg};
+                    const debugInfo = 'Camera: ${cameraLat.toFixed(6)}, ${cameraLon.toFixed(6)} | Image: ${imageLat}, ${imageLon} | Distance: ${distanceMsg}';
                     updateDebugInfo(debugInfo);
                 } catch (error) {
                     console.error('Error in GPS update handler:', error);
