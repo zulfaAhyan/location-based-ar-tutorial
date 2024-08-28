@@ -6,27 +6,8 @@
         <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
         <script src="https://unpkg.com/aframe-look-at-component@0.8.0/dist/aframe-look-at-component.min.js"></script>
         <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar-nft.js"></script>
-        <script>
-            AFRAME.registerComponent('southern-hemisphere-fix', {
-                init: function () {
-                    var el = this.el;
-                    var originalLatitude = el.getAttribute('gps-entity-place').latitude;
-                    var longitude = el.getAttribute('gps-entity-place').longitude;
-
-                    // Convert negative latitude to positive
-                    var positiveLatitude = Math.abs(originalLatitude);
-
-                    el.setAttribute('gps-entity-place', {
-                        latitude: positiveLatitude,
-                        longitude: longitude
-                    });
-
-                    console.log('Applied Southern Hemisphere fix. Original lat:', originalLatitude, 'New lat:', positiveLatitude);
-                }
-            });
-        </script>
     </head>
-  <body style="margin: 0; overflow: hidden;">
+    <body style="margin: 0; overflow: hidden;">
         <a-scene
             vr-mode-ui="enabled: false"
             arjs="sourceType: webcam; videoTexture: true; debugUIEnabled: false;"
@@ -36,27 +17,54 @@
                     src="assets/arrow3.png"
                     look-at="[gps-camera]"
                     scale="1 1 1"
-                    gps-entity-place="latitude: -6.7616; longitude: 39.1938;"
-                    id="targetImage"
+                    gps-entity-place="latitude: -6.761643; longitude: 39.193781;"
                 ></a-image>
             <a-camera gps-camera rotation-reader></a-camera>
         </a-scene>
         <div style="position: fixed; bottom: 10px; left: 10px; width: 100%; text-align: left; z-index: 1; color: white; background-color: rgba(0,0,0,0.5); padding: 5px;">
-            <p id="debug" style="font-size: 10px;"></p>
+            <p id="debug" style="font-size: 10px;">Waiting for GPS data...</p>
         </div>
         <script>
             // Debugging
             const debugEl = document.getElementById('debug');
-            const targetImage = document.getElementById('targetImage');
-           window.addEventListener('gps-camera-update-position', e => {
-            const cameraLat = e.detail.position.latitude;
-            const cameraLon = e.detail.position.longitude;
-            const imageEl = document.querySelector('a-image');
-            const distanceMsg = imageEl.getAttribute('distance');
-            const imageLat = imageEl.getAttribute('gps-entity-place').latitude;
-            const imageLon = imageEl.getAttribute('gps-entity-place').longitude;
-            debugEl.textContent = Camera: ${cameraLat.toFixed(6)}, ${cameraLon.toFixed(6)} | Image: ${imageLat}, ${imageLon} | Distance: ${distanceMsg};
-        });
+            console.log('Debug element:', debugEl);
+
+            function updateDebugInfo(info) {
+                console.log('Updating debug info:', info);
+                if (debugEl) {
+                    debugEl.textContent = info;
+                } else {
+                    console.error('Debug element not found');
+                }
+            }
+
+            window.addEventListener('load', () => {
+                console.log('Window loaded');
+                updateDebugInfo('Page loaded. Waiting for GPS data...');
+            });
+
+            window.addEventListener('gps-camera-update-position', e => {
+                console.log('GPS camera update event received', e);
+                try {
+                    const cameraLat = e.detail.position.latitude;
+                    const cameraLon = e.detail.position.longitude;
+                    const imageEl = document.querySelector('a-image');
+                    const distanceMsg = imageEl.getAttribute('distance');
+                    const imageLat = imageEl.getAttribute('gps-entity-place').latitude;
+                    const imageLon = imageEl.getAttribute('gps-entity-place').longitude;
+                    const debugInfo = Camera: ${cameraLat.toFixed(6)}, ${cameraLon.toFixed(6)} | Image: ${imageLat}, ${imageLon} | Distance: ${distanceMsg};
+                    updateDebugInfo(debugInfo);
+                } catch (error) {
+                    console.error('Error in GPS update handler:', error);
+                    updateDebugInfo('Error processing GPS data. Check console for details.');
+                }
+            });
+
+            // Additional error handling
+            window.addEventListener('error', function(event) {
+                console.error('Caught error:', event.error);
+                updateDebugInfo('An error occurred. Check console for details.');
+            });
         </script>
     </body>
 </html>
