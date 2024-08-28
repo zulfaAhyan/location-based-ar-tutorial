@@ -24,11 +24,11 @@
         <a-box
             color="red"
             scale="20 20 20"
-            position="0 0 -5"
-            >
+            gps-entity-place="latitude: -6.761643; longitude: 39.193781;"
+            look-at="[gps-camera]">
         </a-box>
         <a-sphere color="blue" radius="5" gps-entity-place="latitude: -6.761643; longitude: 39.193781;"></a-sphere>
-        <a-camera></a-camera>
+        <a-camera gps-camera rotation-reader near="0.1" far="10000"></a-camera>
     </a-scene>
 
     <div id="debugDiv" style="position: fixed; top: 0; left: 0; background: rgba(0,0,0,0.7); color: white; padding: 10px; font-family: monospace; font-size: 14px; z-index: 9999;">
