@@ -10,7 +10,7 @@
     <body style="margin: 0; overflow: hidden;">
         <a-scene
             vr-mode-ui="enabled: false"
-            arjs="sourceType: webcam; videoTexture: true; debugUIEnabled: false;"
+            arjs="sourceType: webcam; videoTexture: true; debugUIEnabled: true;"
             renderer="antialias: true; alpha: true"
             embedded>
                 <a-image
@@ -19,6 +19,7 @@
                     scale="120 120 120"
                     gps-entity-place="latitude: -6.7615; longitude: 39.1937; minDistance: 0;"
                 ></a-image>
+                <a-box color="red" position="0 0 -5"></a-box>
             <a-camera gps-camera rotation-reader></a-camera>
         </a-scene>
         <div style="position: fixed; bottom: 10px; left: 10px; width: 100%; text-align: left; z-index: 1; color: white; background-color: rgba(0,0,0,0.5); padding: 5px;">
@@ -56,6 +57,11 @@
                 const distanceMsg = imageEl ? imageEl.getAttribute('distance') : 'N/A';
                 console.log('Distance:', distanceMsg);
                 
+                const imageE1 = document.querySelector('a-image');
+                console.log('Image position:', imageE1.getAttribute('position'));
+                console.log('Image Visible:', imageE1.object3D.visible);
+
+
                 debugEl.textContent = `Camera: ${cameraLat.toFixed(6)}, ${cameraLon.toFixed(6)} (Dist: ${distanceMsg})`;
             });
             
