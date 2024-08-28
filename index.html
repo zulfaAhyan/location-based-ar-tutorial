@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="utf-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
@@ -25,28 +25,30 @@
             color="red"
             scale="20 20 20"
             gps-entity-place="latitude: -6.761643; longitude: 39.193781;"
-            look-at="[gps-camera]"
-        ></a-box>
+            look-at="[gps-camera]">
+        </a-box>
         <a-camera gps-camera rotation-reader></a-camera>
     </a-scene>
+
     <div id="debugDiv" style="position: fixed; top: 0; left: 0; background: rgba(0,0,0,0.7); color: white; padding: 10px; font-family: monospace; font-size: 14px; z-index: 9999;">
         Initializing AR scene...
     </div>
 
     <script>
-    (function() {
-        function debounce(func, wait) {
-            let timeout;
-            return function executedFunction(...args) {
-                const later = () => {
-                    clearTimeout(timeout);
-                    func(...args);
-                };
+    // Define the debounce function before using it
+    function debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
                 clearTimeout(timeout);
-                timeout = setTimeout(later, wait);
+                func(...args);
             };
-        }
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    }
 
+    (function() {
         document.addEventListener('DOMContentLoaded', () => {
             console.log('DOM fully loaded and parsed');
             const debugDiv = document.getElementById('debugDiv');
@@ -111,4 +113,3 @@
     </script>
 </body>
 </html>
-Last edited 4 minutes ago
