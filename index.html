@@ -43,23 +43,20 @@
                 updateDebugInfo('Page loaded. Waiting for GPS data...');
             });
 
-            window.addEventListener('gps-camera-update-position', e => {
-                console.log('GPS camera update event received', e);
-                try {
-                    const cameraLat = e.detail.position.latitude;
-                    const cameraLon = e.detail.position.longitude;
-                    const imageEl = document.querySelector('a-image');
-                    const distanceMsg = imageEl.getAttribute('distance');
-                    const imageLat = imageEl.getAttribute('gps-entity-place').latitude;
-                    const imageLon = imageEl.getAttribute('gps-entity-place').longitude;
-                    const debugInfo = 'Camera: ${cameraLat.toFixed(6)}, ${cameraLon.toFixed(6)} | Image: ${imageLat}, ${imageLon} | Distance: ${distanceMsg}';
-                    updateDebugInfo(debugInfo);
-                } catch (error) {
-                    console.error('Error in GPS update handler:', error);
-                    updateDebugInfo('Error processing GPS data. Check console for details.');
-                }
+           window.addEventListener('gps-camera-update-position', e => {
+                console.log('GPS event received:', e);
+                const cameraLat = e.detail.position.latitude;
+                const cameraLon = e.detail.position.longitude;
+                console.log('Camera position:', cameraLat, cameraLon);
+                
+                const imageEl = document.querySelector('a-image');
+                console.log('Image element:', imageEl);
+                
+                const distanceMsg = imageEl ? imageEl.getAttribute('distance') : 'N/A';
+                console.log('Distance:', distanceMsg);
+                
+                debugEl.textContent = Camera: ${cameraLat.toFixed(6)}, ${cameraLon.toFixed(6)} (Dist: ${distanceMsg});
             });
-
             // Additional error handling
             window.addEventListener('error', function(event) {
                 console.error('Caught error:', event.error);
