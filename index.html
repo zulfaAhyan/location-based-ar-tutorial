@@ -7,20 +7,49 @@
         <script src="https://unpkg.com/aframe-look-at-component@0.8.0/dist/aframe-look-at-component.min.js"></script>
         <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar-nft.js"></script>
     </head>
-   <body style="margin: 0; overflow: hidden;">
-      <a-scene vr-mode-ui="enabled: false">
-        <a-box color="red" position="0 0 -5"></a-box>
-        <a-camera></a-camera>
-      </a-scene>
-      <div id="debugDiv" style="position: fixed; top: 0; left: 0; background: rgba(0,0,0,0.5); color: white; padding: 10px;">
-        Debug info will appear here
-      </div>
-      <script>
-        document.addEventListener('DOMContentLoaded', (event) => {
-          console.log('DOM fully loaded and parsed');
-          const debugDiv = document.getElementById('debugDiv');
-          debugDiv.textContent = 'Scene loaded. You should see a red box.';
-        });
-      </script>
+    <body style="margin: 0; overflow: hidden;">
+        <a-scene
+            vr-mode-ui="enabled: false"
+            arjs="sourceType: webcam; videoTexture: true; debugUIEnabled: true;"
+            renderer="antialias: true; alpha: true"
+            embedded>
+            <a-box
+                color="red"
+                scale="20 20 20"
+                gps-entity-place="latitude: -6.761643; longitude: 39.193781;"
+                look-at="[gps-camera]"
+            ></a-box>
+            <a-camera gps-camera rotation-reader></a-camera>
+        </a-scene>
+        <div id="debugDiv" style="position: fixed; top: 0; left: 0; background: rgba(0,0,0,0.5); color: white; padding: 10px; z-index: 9999;">
+            Debug info will appear here
+        </div>
+        <script>
+            document.addEventListener('DOMContentLoaded', (event) => {
+                console.log('DOM fully loaded and parsed');
+                const debugDiv = document.getElementById('debugDiv');
+                debugDiv.textContent = 'AR scene loaded. Looking for GPS signal...';
+
+                const boxEl = document.querySelector('a-box');
+                
+                boxEl.addEventListener('gps-entity-place-added', () => {
+                    debugDiv.textContent += '\nBox positioned based on GPS coordinates.';
+                });
+
+                window.addEventListener('gps-camera-update-position', e => {
+                    try {
+                        const latitude = e.detail.position.latitude;
+                        const longitude = e.detail.position.longitude;
+                        debugDiv.textContent = Current GPS: lat ${latitude.toFixed(6)}, lon ${longitude.toFixed(6)};
+                        
+                        if (boxEl.getAttribute('distance')) {
+                            debugDiv.textContent += \nDistance to box: ${boxEl.getAttribute('distance').toFixed(2)} meters;
+                        }
+                    } catch (error) {
+                        debugDiv.textContent += '\nError in GPS update: ' + error.message;
+                    }
+                });
+            });
+        </script>
     </body>
 </html>
