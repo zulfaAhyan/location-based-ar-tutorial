@@ -7,74 +7,21 @@
         <script src="https://unpkg.com/aframe-look-at-component@0.8.0/dist/aframe-look-at-component.min.js"></script>
         <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar-nft.js"></script>
     </head>
-    <body style="margin: 0; overflow: hidden;">
-        <a-scene
-            vr-mode-ui="enabled: false"
-            arjs="sourceType: webcam; videoTexture: true; debugUIEnabled: true;"
-            renderer="antialias: true; alpha: true"
-            embedded>
-            <a-image
-                src="assets/arrow3.png"
-                look-at="[gps-camera]"
-                scale="120 120 120"
-                gps-entity-place="latitude: -6.7615; longitude: 39.1937; minDistance: 0;"
-            ></a-image>
-            <a-box color="red" position="0 0 -5"></a-box>
-            <a-camera gps-camera rotation-reader></a-camera>
-        </a-scene>
-        <div style="position: fixed; bottom: 10px; left: 10px; width: 100%; text-align: left; z-index: 1; color: white; background-color: rgba(0,0,0,0.5); padding: 5px;">
-            <p id="debug" style="font-size: 10px;">Waiting for GPS data...</p>
-        </div>
-        <script>
-            // Debugging
-            const debugEl = document.getElementById('debug');
-            console.log('Debug element:', debugEl);
-
-            function updateDebugInfo(info) {
-                console.log('Updating debug info:', info);
-                if (debugEl) {
-                    debugEl.textContent = info;
-                } else {
-                    console.error('Debug element not found');
-                }
-            }
-
-            window.addEventListener('load', () => {
-                console.log('Window loaded');
-                updateDebugInfo('Page loaded. Waiting for GPS data...');
-            });
-
-            
-            window.addEventListener('gps-camera-update-position', e => {
-                console.log('GPS event received:', e);
-                const cameraLat = e.detail.position.latitude;
-                const cameraLon = e.detail.position.longitude;
-                console.log('Camera position:', cameraLat, cameraLon);
-                
-                const imageEl = document.querySelector('a-image');
-                console.log('Image element:', imageEl);
-                
-                const distanceMsg = imageEl ? imageEl.getAttribute('distance') : 'N/A';
-                console.log('Distance:', distanceMsg);
-                
-                const imageE1 = document.querySelector('a-image');
-                console.log('Image position:', imageE1.getAttribute('position'));
-                console.log('Image Visible:', imageE1.object3D.visible);
-
-
-                debugEl.textContent = `Camera: ${cameraLat.toFixed(6)}, ${cameraLon.toFixed(6)} (Dist: ${distanceMsg})`;
-            });
-            
-            // Additional error handling
-            window.addEventListener('error', function(event) {
-                console.error('Caught error:', event.error);
-                updateDebugInfo('An error occurred. Check console for details.');
-            });
-
-            document.querySelector('a-image').addEventListener('error', function (evt) {
-                console.error('Error loading image:', evt);
-            });
-
-        </script>
+   <body style="margin: 0; overflow: hidden;">
+      <a-scene>
+        <a-box color="red" position="0 0 -5"></a-box>
+        <a-sky color="#ECECEC"></a-sky>
+        <a-camera></a-camera>
+      </a-scene>
+      <div id="debugDiv" style="position: fixed; top: 0; left: 0; background: rgba(0,0,0,0.5); color: white; padding: 10px;">
+        Debug info will appear here
+      </div>
+      <script>
+        document.addEventListener('DOMContentLoaded', (event) => {
+          console.log('DOM fully loaded and parsed');
+          const debugDiv = document.getElementById('debugDiv');
+          debugDiv.textContent = 'Scene loaded. You should see a red box.';
+        });
+      </script>
     </body>
 </html>
