@@ -23,7 +23,7 @@
           lat: acc.lat + pos.lat,
           lng: acc.lng + pos.lng
         }), { lat: 0, lng: 0 });
-      
+        
         smoothedPosition.lat = sum.lat / positionHistory.length;
         smoothedPosition.lng = sum.lng / positionHistory.length;
 
@@ -39,53 +39,6 @@
           });
         }
       }, 1000);
-
-        // Function to get route ID from URL
-      function getRouteIdFromUrl() {
-        const urlParams = new URLSearchParams(window.location.search);
-        return urlParams.get('routeId');
-      }
-
-      // Function to fetch waypoints from server
-      async function fetchWaypoints(routeId) {
-        try {
-          const response = await fetch(`http://localhost:3000/get-waypoints/${routeId}`);
-          if (!response.ok) {
-            throw new Error('Network response was not ok');
-          }
-          return await response.json();
-        } catch (error) {
-          console.error('Error fetching waypoints:', error);
-          return [];
-        }
-      }
-
-      // Function to create AR entities for waypoints
-      function createWaypointEntities(waypoints) {
-        const scene = document.querySelector('a-scene');
-        waypoints.forEach((waypoint, index) => {
-          const entity = document.createElement('a-text');
-          entity.setAttribute('value', `Waypoint ${index + 1}`);
-          entity.setAttribute('look-at', '[gps-camera]');
-          entity.setAttribute('scale', '100 100 100');
-          entity.setAttribute('color', 'red');
-          entity.setAttribute('gps-entity-place', `latitude: ${waypoint.lat}; longitude: ${waypoint.lng};`);
-          scene.appendChild(entity);
-        });
-      }
-
-       // Main function to initialize everything
-      async function init() {
-        const routeId = getRouteIdFromUrl();
-        if (routeId) {
-          const waypoints = await fetchWaypoints(routeId);
-          createWaypointEntities(waypoints);
-        }
-      }
-
-      // Call init function when the page loads
-      window.onload = init;
-      
     </script>
   </head>
   <body>
