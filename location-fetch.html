@@ -3,12 +3,44 @@
   <head>
     <meta charset="utf-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-    <title>GeoAR.js demo</title>
+    <title>Enhanced GeoAR.js demo</title>
     <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
     <script src="https://unpkg.com/aframe-look-at-component@0.8.0/dist/aframe-look-at-component.min.js"></script>
     <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar-nft.js"></script>
-  </head>
+    <script>
+      // Simple moving average for smoothing
+      const smoothedPosition = { lat: 0, lng: 0 };
+      const positionHistory = [];
+      const historyLength = 5;
 
+      function updatePosition(newLat, newLng) {
+        positionHistory.push({ lat: newLat, lng: newLng });
+        if (positionHistory.length > historyLength) {
+          positionHistory.shift();
+        }
+        
+        const sum = positionHistory.reduce((acc, pos) => ({
+          lat: acc.lat + pos.lat,
+          lng: acc.lng + pos.lng
+        }), { lat: 0, lng: 0 });
+        
+        smoothedPosition.lat = sum.lat / positionHistory.length;
+        smoothedPosition.lng = sum.lng / positionHistory.length;
+
+        const textEntity = document.querySelector('[gps-entity-place]');
+        textEntity.setAttribute('gps-entity-place', `latitude: ${smoothedPosition.lat}; longitude: ${smoothedPosition.lng};`);
+      }
+
+      // Update position every second (adjust as needed)
+      setInterval(() => {
+        if ("geolocation" in navigator) {
+          navigator.geolocation.getCurrentPosition((position) => {
+            updatePosition(position.coords.latitude, position.coords.longitude);
+          });
+        }
+      }, 1000);
+    </script>
+  </head>
   <body>
     <a-scene
       vr-mode-ui="enabled: false"
