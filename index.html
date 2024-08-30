@@ -13,32 +13,28 @@
       const positionHistory = [];
       const historyLength = 5;
 
-      function updatePosition(newLat, newLng) {
-        positionHistory.push({ lat: newLat, lng: newLng });
-        if (positionHistory.length > historyLength) {
-          positionHistory.shift();
-        }
-        
-        const sum = positionHistory.reduce((acc, pos) => ({
-          lat: acc.lat + pos.lat,
-          lng: acc.lng + pos.lng
-        }), { lat: 0, lng: 0 });
-      
-        smoothedPosition.lat = sum.lat / positionHistory.length;
-        smoothedPosition.lng = sum.lng / positionHistory.length;
-
-        const textEntity = document.querySelector('[gps-entity-place]');
-        textEntity.setAttribute('gps-entity-place', `latitude: ${smoothedPosition.lat}; longitude: ${smoothedPosition.lng};`);
+     function updatePosition(newLat, newLng) {
+      positionHistory.push({ lat: newLat, lng: newLng });
+      if (positionHistory.length > historyLength) {
+        positionHistory.shift();
       }
+    
+      const sum = positionHistory.reduce((acc, pos) => ({
+        lat: acc.lat + pos.lat,
+        lng: acc.lng + pos.lng
+      }), { lat: 0, lng: 0 });
+    
+      smoothedPosition.lat = sum.lat / positionHistory.length;
+      smoothedPosition.lng = sum.lng / positionHistory.length;
+    
+      const textEntity = document.querySelector('[gps-entity-place]');
+      if (textEntity) {  // Check if the element exists
+        textEntity.setAttribute('gps-entity-place', `latitude: ${smoothedPosition.lat}; longitude: ${smoothedPosition.lng};`);
+      } else {
+        console.warn("Text entity with [gps-entity-place] attribute not found.");
+      }
+    }
 
-      // Update position every second (adjust as needed)
-      setInterval(() => {
-        if ("geolocation" in navigator) {
-          navigator.geolocation.getCurrentPosition((position) => {
-            updatePosition(position.coords.latitude, position.coords.longitude);
-          });
-        }
-      }, 1000);
 
         // Function to get route ID from URL
       function getRouteIdFromUrl() {
