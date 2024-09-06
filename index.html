@@ -61,7 +61,7 @@
         const scene = document.querySelector('a-scene');
         waypoints.forEach((waypoint, index) => {
           const entity = document.createElement('a-text');
-          entity.setAttribute('value', `Waypoint ${index + 1}`);
+          entity.setAttribute('value', `Point ${index + 1}`);
           // entity.setAttribute('value', `.`);
           entity.setAttribute('look-at', '[gps-camera]');
           entity.setAttribute('scale', '50 50 50');
