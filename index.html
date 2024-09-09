@@ -45,7 +45,7 @@
       // Function to fetch waypoints from server
       async function fetchWaypoints(routeId) {
         try {
-          const response = await fetch(`http://192.168.20.100:3000/get-waypoints/${routeId}`);
+          const response = await fetch(`http://192.168.252.100:3000/get-waypoints/${routeId}`);
           if (!response.ok) {
             throw new Error('Network response was not ok');
           }
