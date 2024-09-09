@@ -3,46 +3,43 @@
   <head>
     <meta charset="utf-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-    <title>Enhanced GeoAR.js demo</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Enhanced GeoAR.js Navigation demo</title>
     <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
     <script src="https://unpkg.com/aframe-look-at-component@0.8.0/dist/aframe-look-at-component.min.js"></script>
     <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar-nft.js"></script>
     <script>
-      // Simple moving average for smoothing
       const smoothedPosition = { lat: 0, lng: 0 };
       const positionHistory = [];
       const historyLength = 5;
 
-     function updatePosition(newLat, newLng) {
-      positionHistory.push({ lat: newLat, lng: newLng });
-      if (positionHistory.length > historyLength) {
-        positionHistory.shift();
+      function updatePosition(newLat, newLng) {
+        positionHistory.push({ lat: newLat, lng: newLng });
+        if (positionHistory.length > historyLength) {
+          positionHistory.shift();
+        }
+      
+        const sum = positionHistory.reduce((acc, pos) => ({
+          lat: acc.lat + pos.lat,
+          lng: acc.lng + pos.lng
+        }), { lat: 0, lng: 0 });
+      
+        smoothedPosition.lat = sum.lat / positionHistory.length;
+        smoothedPosition.lng = sum.lng / positionHistory.length;
+      
+        const textEntity = document.querySelector('[gps-entity-place]');
+        if (textEntity) {
+          textEntity.setAttribute('gps-entity-place', `latitude: ${smoothedPosition.lat}; longitude: ${smoothedPosition.lng};`);
+        } else {
+          console.warn("Text entity with [gps-entity-place] attribute not found.");
+        }
       }
-    
-      const sum = positionHistory.reduce((acc, pos) => ({
-        lat: acc.lat + pos.lat,
-        lng: acc.lng + pos.lng
-      }), { lat: 0, lng: 0 });
-    
-      smoothedPosition.lat = sum.lat / positionHistory.length;
-      smoothedPosition.lng = sum.lng / positionHistory.length;
-    
-      const textEntity = document.querySelector('[gps-entity-place]');
-      if (textEntity) {  // Check if the element exists
-        textEntity.setAttribute('gps-entity-place', `latitude: ${smoothedPosition.lat}; longitude: ${smoothedPosition.lng};`);
-      } else {
-        console.warn("Text entity with [gps-entity-place] attribute not found.");
-      }
-    }
 
-
-        // Function to get route ID from URL
       function getRouteIdFromUrl() {
         const urlParams = new URLSearchParams(window.location.search);
         return urlParams.get('routeId');
       }
 
-      // Function to fetch waypoints from server
       async function fetchWaypoints(routeId) {
         try {
           const response = await fetch(`http://192.168.252.100:3000/get-waypoints/${routeId}`);
@@ -56,23 +53,36 @@
         }
       }
 
-      // Function to create AR entities for waypoints
       function createWaypointEntities(waypoints) {
         const scene = document.querySelector('a-scene');
         waypoints.forEach((waypoint, index) => {
-          const entity = document.createElement('a-text');
-          // entity.setAttribute('value', `Point ${index + 1}`);
-          entity.setAttribute('value', `.`);
-          entity.setAttribute('look-at', '[gps-camera]');
-          entity.setAttribute('scale', '10 10 10');
-          // entity.setAttribute('scale', '300 300 300');
-          entity.setAttribute('color', 'blue');
+          // Create waypoint marker
+          const entity = document.createElement('a-sphere');
+          entity.setAttribute('radius', '0.5');
+          entity.setAttribute('color', index === 0 ? 'green' : (index === waypoints.length - 1 ? 'red' : 'blue'));
           entity.setAttribute('gps-entity-place', `latitude: ${waypoint.lat}; longitude: ${waypoint.lng};`);
           scene.appendChild(entity);
+
+          // Create text label
+          const label = document.createElement('a-text');
+          label.setAttribute('value', `${index + 1}`);
+          label.setAttribute('look-at', '[gps-camera]');
+          label.setAttribute('scale', '5 5 5');
+          label.setAttribute('align', 'center');
+          label.setAttribute('color', 'white');
+          label.setAttribute('gps-entity-place', `latitude: ${waypoint.lat}; longitude: ${waypoint.lng};`);
+          scene.appendChild(label);
+
+          // Create line to next waypoint
+          if (index < waypoints.length - 1) {
+            const nextWaypoint = waypoints[index + 1];
+            const line = document.createElement('a-entity');
+            line.setAttribute('line', `start: ${waypoint.lng} 1.6 ${-waypoint.lat}; end: ${nextWaypoint.lng} 1.6 ${-nextWaypoint.lat}; color: yellow`);
+            scene.appendChild(line);
+          }
         });
       }
 
-       // Main function to initialize everything
       async function init() {
         const routeId = getRouteIdFromUrl();
         if (routeId) {
@@ -81,17 +91,16 @@
         }
       }
 
-      // Call init function when the page loads
       window.onload = init;
-      
     </script>
   </head>
-  <body>
+  <body style="margin: 0; overflow: hidden;">
     <a-scene
       vr-mode-ui="enabled: false"
       arjs="sourceType: webcam; videoTexture: true; debugUIEnabled: false;"
     >
-      <a-camera gps-camera rotation-reader> </a-camera>
+      <a-camera gps-camera rotation-reader></a-camera>
     </a-scene>
   </body>
 </html>
+Last edited just no
