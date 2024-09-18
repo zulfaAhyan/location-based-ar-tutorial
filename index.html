@@ -42,7 +42,7 @@
 
       async function fetchWaypoints(routeId) {
         try {
-          const response = await fetch(`http://192.168.252.100:3000/get-waypoints/${routeId}`);
+          const response = await fetch(`https://waypoints-prht.onrender.com/get-waypoints/${routeId}`);
           if (!response.ok) {
             throw new Error('Network response was not ok');
           }
