@@ -12,8 +12,7 @@
       const smoothedPosition = { lat: 0, lng: 0 };
       const positionHistory = [];
       const historyLength = 5;
-      let currentWaypointIndex = 0;
-      let waypoints = [];
+      let previousLat = null;
 
       function updatePosition(newLat, newLng) {
         positionHistory.push({ lat: newLat, lng: newLng });
@@ -29,8 +28,27 @@
         smoothedPosition.lat = sum.lat / positionHistory.length;
         smoothedPosition.lng = sum.lng / positionHistory.length;
       
-        updateNavigationArrow();
-        checkWaypointProximity();
+        const textEntity = document.querySelector('[gps-entity-place]');
+        if (textEntity) {
+          textEntity.setAttribute('gps-entity-place', `latitude: ${smoothedPosition.lat}; longitude: ${smoothedPosition.lng};`);
+        } else {
+          console.warn("Text entity with [gps-entity-place] attribute not found.");
+        }
+
+        // Check if the third decimal place has changed
+        if (previousLat === null || Math.floor(previousLat * 1000) !== Math.floor(smoothedPosition.lat * 1000)) {
+          createSphere(smoothedPosition.lat, smoothedPosition.lng);
+          previousLat = smoothedPosition.lat;
+        }
+      }
+
+      function createSphere(lat, lng) {
+        const scene = document.querySelector('a-scene');
+        const sphere = document.createElement('a-sphere');
+        sphere.setAttribute('radius', '0.5');
+        sphere.setAttribute('color', 'yellow');
+        sphere.setAttribute('gps-entity-place', `latitude: ${lat}; longitude: ${lng};`);
+        scene.appendChild(sphere);
       }
 
       function getRouteIdFromUrl() {
@@ -79,101 +97,20 @@
             scene.appendChild(line);
           }
         });
-
-        // Create navigation arrow
-        const arrow = document.createElement('a-entity');
-        arrow.setAttribute('geometry', 'primitive: cone; radiusBottom: 0.5; radiusTop: 0');
-        arrow.setAttribute('material', 'color: red');
-        arrow.setAttribute('rotation', '90 0 0');
-        arrow.setAttribute('scale', '1 2 1');
-        arrow.setAttribute('id', 'navigation-arrow');
-        arrow.setAttribute('gps-entity-place', `latitude: ${smoothedPosition.lat}; longitude: ${smoothedPosition.lng};`);
-        scene.appendChild(arrow);
-      }
-
-      function updateNavigationArrow() {
-        const arrow = document.getElementById('navigation-arrow');
-        if (arrow && currentWaypointIndex < waypoints.length) {
-          const targetWaypoint = waypoints[currentWaypointIndex];
-          const dx = targetWaypoint.lng - smoothedPosition.lng;
-          const dy = targetWaypoint.lat - smoothedPosition.lat;
-          const angle = Math.atan2(dy, dx) * (180 / Math.PI);
-          arrow.setAttribute('rotation', `90 0 ${angle}`);
-          arrow.setAttribute('gps-entity-place', `latitude: ${smoothedPosition.lat}; longitude: ${smoothedPosition.lng};`);
-        }
-      }
-
-      function checkWaypointProximity() {
-        if (currentWaypointIndex < waypoints.length) {
-          const targetWaypoint = waypoints[currentWaypointIndex];
-          const distance = calculateDistance(smoothedPosition, targetWaypoint);
-          if (distance < 10) { // 10 meters proximity
-            currentWaypointIndex++;
-            updateNavigationArrow();
-            if (currentWaypointIndex < waypoints.length) {
-              showDirectionMessage(`Proceed to waypoint ${currentWaypointIndex + 1}`);
-            } else {
-              showDirectionMessage("You have reached your destination!");
-            }
-          }
-        }
-      }
-
-      function calculateDistance(pos1, pos2) {
-        const R = 6371e3; // Earth's radius in meters
-        const φ1 = pos1.lat * Math.PI / 180;
-        const φ2 = pos2.lat * Math.PI / 180;
-        const Δφ = (pos2.lat - pos1.lat) * Math.PI / 180;
-        const Δλ = (pos2.lng - pos1.lng) * Math.PI / 180;
-
-        const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
-                  Math.cos(φ1) * Math.cos(φ2) *
-                  Math.sin(Δλ/2) * Math.sin(Δλ/2);
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-
-        return R * c;
-      }
-
-      function showDirectionMessage(message) {
-        const directionDisplay = document.getElementById('direction-display');
-        directionDisplay.textContent = message;
       }
 
       async function init() {
         const routeId = getRouteIdFromUrl();
         if (routeId) {
-          waypoints = await fetchWaypoints(routeId);
+          const waypoints = await fetchWaypoints(routeId);
           createWaypointEntities(waypoints);
         }
-
-        // Simulate GPS updates (replace with real GPS data in production)
-        setInterval(() => {
-          const newLat = smoothedPosition.lat + (Math.random() - 0.5) * 0.0001;
-          const newLng = smoothedPosition.lng + (Math.random() - 0.5) * 0.0001;
-          updatePosition(newLat, newLng);
-        }, 1000);
       }
 
       window.onload = init;
     </script>
-    <style>
-      #direction-display {
-        position: fixed;
-        bottom: 20px;
-        left: 50%;
-        transform: translateX(-50%);
-        background-color: rgba(0, 0, 0, 0.7);
-        color: white;
-        padding: 10px;
-        border-radius: 5px;
-        font-family: Arial, sans-serif;
-        font-size: 18px;
-        z-index: 1000;
-      }
-    </style>
   </head>
   <body style="margin: 0; overflow: hidden;">
-    <div id="direction-display"></div>
     <a-scene
       vr-mode-ui="enabled: false"
       arjs="sourceType: webcam; videoTexture: true; debugUIEnabled: false;"
