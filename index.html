@@ -7,7 +7,8 @@
     <title>Enhanced GeoAR.js Navigation demo</title>
     <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
     <script src="https://unpkg.com/aframe-look-at-component@0.8.0/dist/aframe-look-at-component.min.js"></script>
-    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar-nft.js"></script>
+    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+    <script src="https://unpkg.com/aframe-line-component@1.0.1/dist/aframe-line-component.min.js"></script>
     <script>
       const smoothedPosition = { lat: 0, lng: 0 };
       const positionHistory = [];
@@ -69,34 +70,54 @@
         }
       }
 
-      function createWaypointEntities(waypoints) {
+     function createWaypointEntities(waypoints, originCoords) {
         const scene = document.querySelector('a-scene');
+        const positions = [];
+
         waypoints.forEach((waypoint, index) => {
-          // Create waypoint marker
+         
+          const position = gpsToWorld(
+            waypoint.lat,
+            waypoint.lng,
+            originCoords.latitude,
+            originCoords.longitude
+          );
+
+          positions.push(position);
+
+         
           const entity = document.createElement('a-sphere');
           entity.setAttribute('radius', '0.5');
-          entity.setAttribute('color', index === 0 ? 'green' : (index === waypoints.length - 1 ? 'red' : 'blue'));
-          entity.setAttribute('gps-entity-place', `latitude: ${waypoint.lat}; longitude: ${waypoint.lng};`);
+          entity.setAttribute(
+            'color',
+            index === 0 ? 'green' : index === waypoints.length - 1 ? 'red' : 'blue'
+          );
+          entity.setAttribute('position', `${position.x} 0 ${position.z}`);
           scene.appendChild(entity);
 
-          // Create text label
+         
           const label = document.createElement('a-text');
           label.setAttribute('value', `${index + 1}`);
           label.setAttribute('look-at', '[gps-camera]');
           label.setAttribute('scale', '5 5 5');
           label.setAttribute('align', 'center');
           label.setAttribute('color', 'white');
-          label.setAttribute('gps-entity-place', `latitude: ${waypoint.lat}; longitude: ${waypoint.lng};`);
+          label.setAttribute('position', `${position.x} 2 ${position.z}`);
           scene.appendChild(label);
-
-          // Create line to next waypoint
-          if (index < waypoints.length - 1) {
-            const nextWaypoint = waypoints[index + 1];
-            const line = document.createElement('a-entity');
-            line.setAttribute('line', `start: ${waypoint.lng} 1.6 ${-waypoint.lat}; end: ${nextWaypoint.lng} 1.6 ${-nextWaypoint.lat}; color: yellow`);
-            scene.appendChild(line);
-          }
         });
+
+       
+        for (let i = 0; i < positions.length - 1; i++) {
+          const start = positions[i];
+          const end = positions[i + 1];
+          const line = document.createElement('a-entity');
+          line.setAttribute('line', {
+            start: `${start.x} 0 ${start.z}`,
+            end: `${end.x} 0 ${end.z}`,
+            color: 'yellow',
+          });
+          scene.appendChild(line);
+        }
       }
 
       async function init() {
@@ -113,7 +134,7 @@
   <body style="margin: 0; overflow: hidden;">
     <a-scene
       vr-mode-ui="enabled: false"
-      arjs="sourceType: webcam; videoTexture: true; debugUIEnabled: false;"
+      arjs="sourceType: gps; videoTexture: true; debugUIEnabled: false;"
     >
       <a-camera gps-camera rotation-reader></a-camera>
     </a-scene>
