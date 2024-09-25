@@ -45,8 +45,17 @@
             }
         });
 
-        function fetchWaypoints() {
-            fetch('https://waypoints-prht.onrender.com/get-waypoints/route_1727277070795')
+        function getRouteIdFromUrl() {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get('routeId');
+        }
+
+        function fetchWaypoints(routeId) {
+            if (!routeId) {
+                console.error('No routeId provided');
+                return;
+            }
+            fetch(`https://waypoints-prht.onrender.com/get-waypoints/${routeId}`)
                 .then(response => response.json())
                 .then(waypoints => {
                     const scene = document.querySelector('a-scene');
@@ -100,7 +109,10 @@
             return (θ * 180 / Math.PI + 360) % 360;
         }
 
-        window.onload = fetchWaypoints;
+        window.onload = function() {
+            const routeId = getRouteIdFromUrl();
+            fetchWaypoints(routeId);
+        };
     </script>
 </head>
 <body style="margin: 0; overflow: hidden;">
