@@ -1,113 +1,111 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, minimum-scale=1, maximum-scale=1">
-    <title>Enhanced GeoAR.js Navigation Demo</title>
-    <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
-    <script src="https://unpkg.com/aframe-look-at-component@0.8.0/dist/aframe-look-at-component.min.js"></script>
-    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
-    <script src="https://unpkg.com/aframe-line-component@1.0.1/dist/aframe-line-component.min.js"></script>
-    <style>
-      body {
-        margin: 0;
-        overflow: hidden;
-        position: fixed;
-        width: 100%;
-        height: 100%;
-      }
-      .a-enter-vr {
-        display: none;
-      }
-    </style>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Simple AR.js Outdoor Navigation</title>
+    <script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
+    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar-nft.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v6.1.1/dist/aframe-extras.min.js"></script>
     <script>
-      AFRAME.registerComponent('rotation-reader', {
-        tick: function () {
-          var rotation = this.el.object3D.rotation;
-          var rotationDegrees = {
-            x: THREE.Math.radToDeg(rotation.x),
-            y: THREE.Math.radToDeg(rotation.y),
-            z: THREE.Math.radToDeg(rotation.z)
-          };
-          var heading = 360 - rotationDegrees.y;
-          if (heading < 0) {
-            heading += 360;
-          }
-          var headingText = document.querySelector('#headingText');
-          if (headingText) {
-            headingText.setAttribute('value', 'Heading: ' + heading.toFixed(0) + '°');
-          }
-          var someEntity = document.querySelector('#someEntity');
-          if (someEntity) {
-            someEntity.object3D.rotation.set(0, THREE.Math.degToRad(-heading), 0);
-          }
-        }
-      });
-
-      function getRouteIdFromUrl() {
-        const urlParams = new URLSearchParams(window.location.search);
-        return urlParams.get('routeId');
-      }
-
-      async function fetchWaypoints(routeId) {
-        try {
-          const response = await fetch(`https://waypoints-prht.onrender.com/get-waypoints/${routeId}`);
-          if (!response.ok) {
-            throw new Error('Network response was not ok');
-          }
-          return await response.json();
-        } catch (error) {
-          console.error('Error fetching waypoints:', error);
-          return [];
-        }
-      }
-
-      function createWaypointEntities(waypoints) {
-        const scene = document.querySelector('a-scene');
-
-        waypoints.forEach((waypoint, index) => {
-          const entity = document.createElement('a-sphere');
-          entity.setAttribute('radius', '5');  // Increased size for better visibility
-          entity.setAttribute('color', index === 0 ? 'green' : index === waypoints.length - 1 ? 'red' : 'yellow');  // Changed blue to yellow for better contrast
-          entity.setAttribute('gps-entity-place', `latitude: ${waypoint.lat}; longitude: ${waypoint.lng};`);
-          entity.setAttribute('material', 'opacity: 0.8');  // Added some transparency
-          scene.appendChild(entity);
-
-          const label = document.createElement('a-text');
-          label.setAttribute('value', `${index + 1}`);
-          label.setAttribute('look-at', '[gps-camera]');
-          label.setAttribute('scale', '10 10 10');  // Increased scale for better visibility
-          label.setAttribute('align', 'center');
-          label.setAttribute('color', 'black');  // Changed to black for contrast against the sphere
-          label.setAttribute('gps-entity-place', `latitude: ${waypoint.lat}; longitude: ${waypoint.lng};`);
-          label.setAttribute('position', '0 3 0');  // Raised the position slightly
-          scene.appendChild(label);
+        AFRAME.registerComponent('gps-new-entity-place', {
+            schema: {
+                latitude: {type: 'number', default: 0},
+                longitude: {type: 'number', default: 0}
+            },
+            init: function () {
+                var camera = document.querySelector('[gps-new-camera]');
+                if (!camera.components['gps-new-camera']) {
+                    camera.addEventListener('componentinitialized', this.init.bind(this));
+                    return;
+                }
+                const gpsPosition = camera.components['gps-new-camera'];
+                this.el.setAttribute('position', gpsPosition.latLonToWorld(this.data.latitude, this.data.longitude));
+            }
         });
-      }
 
-      async function init() {
-        const routeId = getRouteIdFromUrl();
-        if (routeId) {
-          const waypoints = await fetchWaypoints(routeId);
-          document.querySelector('[gps-camera]').addEventListener('gps-camera-update-position', () => {
-            createWaypointEntities(waypoints);
-          });
+        AFRAME.registerComponent('draw-canvas', {
+            init: function() {
+                this.canvas = document.createElement('canvas');
+                this.canvas.width = 512;
+                this.canvas.height = 512;
+                this.texture = new THREE.CanvasTexture(this.canvas);
+                this.el.setAttribute('material', 'src', this.texture);
+            },
+            update: function() {
+                const ctx = this.canvas.getContext('2d');
+                ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                ctx.strokeStyle = 'red';
+                ctx.lineWidth = 10;
+                ctx.beginPath();
+                ctx.moveTo(0, this.canvas.height / 2);
+                ctx.lineTo(this.canvas.width, this.canvas.height / 2);
+                ctx.stroke();
+                this.texture.needsUpdate = true;
+            }
+        });
+
+        function fetchWaypoints() {
+            fetch('https://waypoints-prht.onrender.com/get-waypoints/route_1727270493915')
+                .then(response => response.json())
+                .then(waypoints => {
+                    const scene = document.querySelector('a-scene');
+                    waypoints.forEach((waypoint, index) => {
+                        if (index < waypoints.length - 1) {
+                            const start = waypoint;
+                            const end = waypoints[index + 1];
+                            const midPoint = {
+                                lat: (start.lat + end.lat) / 2,
+                                lng: (start.lng + end.lng) / 2
+                            };
+                            const distance = getDistanceFromLatLonInM(start.lat, start.lng, end.lat, end.lng);
+                            const bearing = getBearing(start.lat, start.lng, end.lat, end.lng);
+                            
+                            const entity = document.createElement('a-plane');
+                            entity.setAttribute('gps-new-entity-place', `latitude: ${midPoint.lat}; longitude: ${midPoint.lng}`);
+                            entity.setAttribute('look-at', '[gps-new-camera]');
+                            entity.setAttribute('material', 'opacity: 0.5; transparent: true');
+                            entity.setAttribute('draw-canvas', '');
+                            entity.setAttribute('scale', `${distance} 0.5 1`);
+                            entity.setAttribute('rotation', `0 ${bearing} 0`);
+                            scene.appendChild(entity);
+                        }
+                    });
+                })
+                .catch(error => console.error('Error fetching waypoints:', error));
         }
-      }
 
-      window.onload = init;
+        function getDistanceFromLatLonInM(lat1, lon1, lat2, lon2) {
+            const R = 6371e3; // Earth's radius in meters
+            const φ1 = lat1 * Math.PI / 180;
+            const φ2 = lat2 * Math.PI / 180;
+            const Δφ = (lat2 - lat1) * Math.PI / 180;
+            const Δλ = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+                      Math.cos(φ1) * Math.cos(φ2) *
+                      Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c;
+        }
+
+        function getBearing(lat1, lon1, lat2, lon2) {
+            const φ1 = lat1 * Math.PI / 180;
+            const φ2 = lat2 * Math.PI / 180;
+            const λ1 = lon1 * Math.PI / 180;
+            const λ2 = lon2 * Math.PI / 180;
+            const y = Math.sin(λ2 - λ1) * Math.cos(φ2);
+            const x = Math.cos(φ1) * Math.sin(φ2) -
+                      Math.sin(φ1) * Math.cos(φ2) * Math.cos(λ2 - λ1);
+            const θ = Math.atan2(y, x);
+            return (θ * 180 / Math.PI + 360) % 360;
+        }
+
+        window.onload = fetchWaypoints;
     </script>
-  </head>
-  <body>
-    <a-scene 
-      vr-mode-ui="enabled: false"
-      arjs="sourceType: webcam; trackingMethod: gps; debugUIEnabled: false;"
-      renderer="logarithmicDepthBuffer: true;"
-      embedded
-    >
-      <a-camera gps-camera rotation-reader></a-camera>
-      <a-text id="headingText" position="0 -1 -3" value="Heading: 0°" align="center" color="white" scale="0.5 0.5 0.5"></a-text>
-      <a-box id="someEntity" position="0 1 -5" rotation="0 0 0" color="blue"></a-box>
+</head>
+<body style="margin: 0; overflow: hidden;">
+    <a-scene vr-mode-ui="enabled: false" embedded arjs="sourceType: webcam; debugUIEnabled: false;">
+        <a-camera gps-new-camera rotation-reader></a-camera>
     </a-scene>
-  </body>
+</body>
 </html>
