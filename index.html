@@ -109,7 +109,7 @@
     </script>
   </head>
   <body style="margin: 0; overflow: hidden;">
-    <a-scene vr-mode-ui="enabled: false" arjs="sourceType: gps; videoTexture: true; debugUIEnabled: false;">
+     <a-scene vr-mode-ui="enabled: false" embedded arjs='sourceType: webcam; trackingMethod: gps; debugUIEnabled: false;'>
       <a-camera gps-camera rotation-reader></a-camera>
       <a-text id="headingText" position="0 2 -3" value="Heading: 0°" align="center" color="white"></a-text>
       <a-box id="someEntity" position="0 1 -5" rotation="0 0 0" color="blue"></a-box>
