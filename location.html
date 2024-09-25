@@ -1,15 +1,118 @@
 <!DOCTYPE html>
 <html>
-<head>
-<title>AR.js A-Frame Location-based</title>
-<script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
-<script type='text/javascript' src='https://raw.githack.com/AR-js-org/AR.js/master/three.js/build/ar-threex-location-only.js'></script>
-<script type='text/javascript' src='https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js'></script>
-</head>
-<body>
-<a-scene vr-mode-ui='enabled: false' arjs='sourceType: webcam; videoTexture: true; debugUIEnabled: false' renderer='antialias: true; alpha: true'>
-    <a-camera gps-new-camera='gpsMinDistance: 5'></a-camera>
-    <a-entity material='color: red' geometry='primitive: box' gps-new-entity-place="latitude: -6.7625; longitude: 39.1946" scale="10 10 10"></a-entity>
-</a-scene>
-</body>
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Enhanced GeoAR.js Navigation Demo</title>
+    <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
+    <script src="https://unpkg.com/aframe-look-at-component@0.8.0/dist/aframe-look-at-component.min.js"></script>
+    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+    <script src="https://unpkg.com/aframe-line-component@1.0.1/dist/aframe-line-component.min.js"></script>
+    <script>
+      // Define rotation-reader component
+      AFRAME.registerComponent('rotation-reader', {
+        tick: function () {
+          // Access the camera's rotation
+          var rotation = this.el.object3D.rotation;
+
+          // Convert rotation to degrees
+          var rotationDegrees = {
+            x: THREE.Math.radToDeg(rotation.x),
+            y: THREE.Math.radToDeg(rotation.y),
+            z: THREE.Math.radToDeg(rotation.z)
+          };
+
+          // Calculate compass heading
+          var heading = 360 - rotationDegrees.y;
+          if (heading < 0) {
+            heading += 360;
+          }
+
+          // Update heading display
+          var headingText = document.querySelector('#headingText');
+          if (headingText) {
+            headingText.setAttribute('value', 'Heading: ' + heading.toFixed(0) + '°');
+          }
+
+          // Rotate an entity opposite to camera rotation
+          var someEntity = document.querySelector('#someEntity');
+          if (someEntity) {
+            someEntity.object3D.rotation.set(0, THREE.Math.degToRad(-heading), 0);
+          }
+        }
+      });
+
+      // Function to get routeId from URL
+      function getRouteIdFromUrl() {
+        const urlParams = new URLSearchParams(window.location.search);
+        return urlParams.get('routeId');
+      }
+
+      // Fetch waypoints from the server
+      async function fetchWaypoints(routeId) {
+        try {
+          const response = await fetch(`https://waypoints-prht.onrender.com/get-waypoints/${routeId}`);
+          if (!response.ok) {
+            throw new Error('Network response was not ok');
+          }
+          return await response.json();
+        } catch (error) {
+          console.error('Error fetching waypoints:', error);
+          return [];
+        }
+      }
+
+      // Create waypoint entities using gps-entity-place
+      function createWaypointEntities(waypoints) {
+        const scene = document.querySelector('a-scene');
+
+        waypoints.forEach((waypoint, index) => {
+          // Create sphere entity at GPS location
+          const entity = document.createElement('a-sphere');
+          entity.setAttribute('radius', '0.5');
+          entity.setAttribute(
+            'color',
+            index === 0 ? 'green' : index === waypoints.length - 1 ? 'red' : 'blue'
+          );
+          entity.setAttribute('gps-entity-place', `latitude: ${waypoint.lat}; longitude: ${waypoint.lng};`);
+          scene.appendChild(entity);
+
+          // Create label for the waypoint
+          const label = document.createElement('a-text');
+          label.setAttribute('value', `${index + 1}`);
+          label.setAttribute('look-at', '[gps-camera]');
+          label.setAttribute('scale', '5 5 5');
+          label.setAttribute('align', 'center');
+          label.setAttribute('color', 'white');
+          label.setAttribute('gps-entity-place', `latitude: ${waypoint.lat}; longitude: ${waypoint.lng};`);
+          label.setAttribute('position', '0 2 0');
+          scene.appendChild(label);
+        });
+
+        // Note: Drawing lines between GPS entities is complex due to asynchronous position updates.
+        // This requires a more advanced setup or different approach.
+      }
+
+      async function init() {
+        const routeId = getRouteIdFromUrl();
+        if (routeId) {
+          const waypoints = await fetchWaypoints(routeId);
+          // Wait for the GPS camera to obtain the user's position
+          document.querySelector('[gps-camera]').addEventListener('gps-camera-update-position', () => {
+            createWaypointEntities(waypoints);
+          });
+        }
+      }
+
+      window.onload = init;
+    </script>
+  </head>
+  <body style="margin: 0; overflow: hidden;">
+    <a-scene vr-mode-ui="enabled: false" arjs="sourceType: gps; videoTexture: true; debugUIEnabled: false;">
+      <a-camera gps-camera rotation-reader></a-camera>
+      <a-text id="headingText" position="0 2 -3" value="Heading: 0°" align="center" color="white"></a-text>
+      <a-box id="someEntity" position="0 1 -5" rotation="0 0 0" color="blue"></a-box>
+    </a-scene>
+  </body>
 </html>
