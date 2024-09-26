@@ -13,9 +13,18 @@
           this.loadWaypoints();
           this.addDebugInfo();
         },
+        getRouteId: function() {
+          const urlParams = new URLSearchParams(window.location.search);
+          return urlParams.get('routeId');
+        },
         loadWaypoints: function() {
-          const routeId = 'route_1727346879930';
-          fetch(`https://waypoints-prht.onrender.com/get-waypoints/${routeId}`)
+          const routeId = this.getRouteId();
+          if (!routeId) {
+            console.error('No routeId provided in URL');
+            return;
+          }
+          const waypointsUrl = `https://waypoints-prht.onrender.com/get-waypoints/${routeId}`;
+          fetch(waypointsUrl)
             .then(response => response.json())
             .then(waypoints => {
               waypoints.forEach((waypoint, index) => {
@@ -53,6 +62,7 @@
             if ('geolocation' in navigator) {
               navigator.geolocation.getCurrentPosition((position) => {
                 debugDiv.innerHTML = `
+                  RouteId: ${this.getRouteId() || 'Not provided'}<br>
                   Lat: ${position.coords.latitude.toFixed(6)}<br>
                   Lon: ${position.coords.longitude.toFixed(6)}<br>
                   Accuracy: ${position.coords.accuracy.toFixed(2)}m
@@ -86,4 +96,4 @@
       <a-camera gps-camera rotation-reader></a-camera>
     </a-scene>
   </body>
-</html>
+</html
