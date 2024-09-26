@@ -27,10 +27,18 @@
           fetch(waypointsUrl)
             .then(response => response.json())
             .then(waypoints => {
+              console.log('Fetched waypoints:', waypoints);
+              if (waypoints.length === 0) {
+                console.warn('No waypoints received from the server');
+              }
               waypoints.forEach((waypoint, index) => {
+                if (!waypoint.latitude || !waypoint.longitude) {
+                  console.error(`Invalid coordinates for waypoint ${index + 1}`);
+                  return;
+                }
                 const text = document.createElement('a-text');
                 text.setAttribute('value', `Point ${index + 1}`);
-                text.setAttribute('scale', '150 150 150');  // Increased scale for better visibility
+                text.setAttribute('scale', '150 150 150');
                 text.setAttribute('align', 'center');
                 text.setAttribute('color', this.getColorForIndex(index));
                 text.setAttribute('look-at', '[gps-camera]');
@@ -38,6 +46,20 @@
                 this.el.sceneEl.appendChild(text);
                 console.log(`Added waypoint ${index + 1}: lat ${waypoint.latitude}, lon ${waypoint.longitude}`);
               });
+              // Add a test point near the first waypoint
+              if (waypoints.length > 0) {
+                const testPoint = document.createElement('a-text');
+                testPoint.setAttribute('value', 'Test Point');
+                testPoint.setAttribute('scale', '150 150 150');
+                testPoint.setAttribute('align', 'center');
+                testPoint.setAttribute('color', 'red');
+                testPoint.setAttribute('look-at', '[gps-camera]');
+                const testLat = waypoints[0].latitude + 0.0001; // Slightly offset
+                const testLon = waypoints[0].longitude + 0.0001; // Slightly offset
+                testPoint.setAttribute('gps-entity-place', `latitude: ${testLat}; longitude: ${testLon}`);
+                this.el.sceneEl.appendChild(testPoint);
+                console.log(`Added test point: lat ${testLat}, lon ${testLon}`);
+              }
             })
             .catch(error => console.error('Error fetching waypoints:', error));
         },
@@ -68,7 +90,8 @@
                   Accuracy: ${position.coords.accuracy.toFixed(2)}m<br>
                   UserAgent: ${navigator.userAgent}<br>
                   Screen: ${window.screen.width}x${window.screen.height}<br>
-                  Orientation: ${screen.orientation ? screen.orientation.type : 'N/A'}
+                  Orientation: ${screen.orientation ? screen.orientation.type : 'N/A'}<br>
+                  Waypoints: Check console log
                 `;
               }, (error) => {
                 debugDiv.innerHTML = `Geolocation error: ${error.message}`;
@@ -92,11 +115,10 @@
     <a-scene
       embedded
       loading-screen="enabled: false;"
-      arjs="sourceType: webcam; debugUIEnabled: false; minDistance: 1; maxDistance: 100;"
+      arjs="sourceType: webcam; debugUIEnabled: true; minDistance: 1; maxDistance: 5000;"
       vr-mode-ui="enabled: false"
       waypoints-manager
     >
-      <a-text value="Test Point" scale="150 150 150" color="red" look-at="[gps-camera]" gps-entity-place="latitude: -6.76453; longitude: 39.21468"></a-text>
       <a-camera gps-camera rotation-reader></a-camera>
     </a-scene>
   </body>
