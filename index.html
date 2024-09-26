@@ -30,7 +30,7 @@
               waypoints.forEach((waypoint, index) => {
                 const text = document.createElement('a-text');
                 text.setAttribute('value', `Point ${index + 1}`);
-                text.setAttribute('scale', '50 50 50');
+                text.setAttribute('scale', '100 100 100');
                 text.setAttribute('align', 'center');
                 text.setAttribute('color', this.getColorForIndex(index));
                 text.setAttribute('look-at', '[gps-camera]');
