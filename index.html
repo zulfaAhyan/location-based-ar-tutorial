@@ -30,7 +30,7 @@
               waypoints.forEach((waypoint, index) => {
                 const text = document.createElement('a-text');
                 text.setAttribute('value', `Point ${index + 1}`);
-                text.setAttribute('scale', '25 25 25');
+                text.setAttribute('scale', '150 150 150');  // Increased scale for better visibility
                 text.setAttribute('align', 'center');
                 text.setAttribute('color', this.getColorForIndex(index));
                 text.setAttribute('look-at', '[gps-camera]');
@@ -65,7 +65,10 @@
                   RouteId: ${this.getRouteId() || 'Not provided'}<br>
                   Lat: ${position.coords.latitude.toFixed(6)}<br>
                   Lon: ${position.coords.longitude.toFixed(6)}<br>
-                  Accuracy: ${position.coords.accuracy.toFixed(2)}m
+                  Accuracy: ${position.coords.accuracy.toFixed(2)}m<br>
+                  UserAgent: ${navigator.userAgent}<br>
+                  Screen: ${window.screen.width}x${window.screen.height}<br>
+                  Orientation: ${screen.orientation ? screen.orientation.type : 'N/A'}
                 `;
               }, (error) => {
                 debugDiv.innerHTML = `Geolocation error: ${error.message}`;
@@ -89,11 +92,12 @@
     <a-scene
       embedded
       loading-screen="enabled: false;"
-      arjs="sourceType: webcam; debugUIEnabled: false;"
+      arjs="sourceType: webcam; debugUIEnabled: false; minDistance: 1; maxDistance: 100;"
       vr-mode-ui="enabled: false"
       waypoints-manager
     >
+      <a-text value="Test Point" scale="150 150 150" color="red" look-at="[gps-camera]" gps-entity-place="latitude: -6.76453; longitude: 39.21468"></a-text>
       <a-camera gps-camera rotation-reader></a-camera>
     </a-scene>
   </body>
-</html
+</html>
