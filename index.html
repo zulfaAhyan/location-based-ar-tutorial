@@ -19,12 +19,15 @@
             .then(response => response.json())
             .then(waypoints => {
               waypoints.forEach((waypoint, index) => {
-                const box = document.createElement('a-box');
-                box.setAttribute('material', 'color', this.getColorForIndex(index));
-                box.setAttribute('scale', '10 10 10');
-                box.setAttribute('gps-entity-place', `latitude: ${waypoint.latitude}; longitude: ${waypoint.longitude}`);
-                this.el.sceneEl.appendChild(box);
-                console.log(`Added waypoint ${index}: lat ${waypoint.latitude}, lon ${waypoint.longitude}`);
+                const text = document.createElement('a-text');
+                text.setAttribute('value', `Point ${index + 1}`);
+                text.setAttribute('scale', '50 50 50');
+                text.setAttribute('align', 'center');
+                text.setAttribute('color', this.getColorForIndex(index));
+                text.setAttribute('look-at', '[gps-camera]');
+                text.setAttribute('gps-entity-place', `latitude: ${waypoint.latitude}; longitude: ${waypoint.longitude}`);
+                this.el.sceneEl.appendChild(text);
+                console.log(`Added waypoint ${index + 1}: lat ${waypoint.latitude}, lon ${waypoint.longitude}`);
               });
             })
             .catch(error => console.error('Error fetching waypoints:', error));
@@ -80,7 +83,6 @@
       vr-mode-ui="enabled: false"
       waypoints-manager
     >
-      <a-box material="color: yellow" scale="20 20 20" gps-entity-place="latitude: -6.7646; longitude: 39.2145"></a-box>
       <a-camera gps-camera rotation-reader></a-camera>
     </a-scene>
   </body>
