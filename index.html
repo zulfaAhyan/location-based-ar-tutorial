@@ -38,7 +38,7 @@
                 }
                 const text = document.createElement('a-text');
                 text.setAttribute('value', `Point ${index + 1}`);
-                text.setAttribute('scale', '150 150 150');
+                text.setAttribute('scale', '5 5 5'); // Reduced scale for better visibility
                 text.setAttribute('align', 'center');
                 text.setAttribute('color', this.getColorForIndex(index));
                 text.setAttribute('look-at', '[gps-camera]');
@@ -50,7 +50,7 @@
               if (waypoints.length > 0) {
                 const testPoint = document.createElement('a-text');
                 testPoint.setAttribute('value', 'Test Point');
-                testPoint.setAttribute('scale', '150 150 150');
+                testPoint.setAttribute('scale', '5 5 5'); // Smaller scale for better visibility
                 testPoint.setAttribute('align', 'center');
                 testPoint.setAttribute('color', 'red');
                 testPoint.setAttribute('look-at', '[gps-camera]');
