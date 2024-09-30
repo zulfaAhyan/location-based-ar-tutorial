@@ -1,72 +1,18 @@
-<!DOCTYPE html>
-<html>
+  <html>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
-    <title>AR GPS Waypoints Navigation</title>
+    <title>AR.js New Location-Based Camera Test</title>
     <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
     <script src="https://raw.githack.com/AR-js-org/AR.js/master/three.js/build/ar-threex-location-only.js"></script>
     <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
-    <script>
-      AFRAME.registerComponent('waypoints-manager', {
-        init: function() {
-          this.loadWaypoints();
-          this.addDebugInfo();
-        },
-        getRouteId: function() {
-          const urlParams = new URLSearchParams(window.location.search);
-          return urlParams.get('routeId');
-        },
-        loadWaypoints: function() {
-          const routeId = this.getRouteId();
-          if (!routeId) {
-            console.error('No routeId provided in URL');
-            return;
-          }
-          const waypointsUrl = `https://waypoints-prht.onrender.com/get-waypoints/${routeId}`;
-          fetch(waypointsUrl)
-            .then(response => response.json())
-            .then(waypoints => {
-              console.log('Fetched waypoints:', waypoints);
-              if (waypoints.length === 0) {
-                console.warn('No waypoints received from the server');
-              }
-              waypoints.forEach((waypoint, index) => {
-                if (!waypoint.lat || !waypoint.lng) {
-                  console.error(`Invalid coordinates for waypoint ${index + 1}`);
-                  return;
-                }
-                const text = document.createElement('a-text');
-                text.setAttribute('value', `Point ${index + 1}`);
-                text.setAttribute('scale', '75 75 75');
-                text.setAttribute('align', 'center');
-                text.setAttribute('color', this.getColorForIndex(index));
-                text.setAttribute('look-at', '[gps-new-camera]');
-                text.setAttribute('gps-new-entity-place', `latitude: ${waypoint.lat}; longitude: ${waypoint.lng}`);
-                this.el.sceneEl.appendChild(text);
-                console.log(`Added waypoint ${index + 1}: lat ${waypoint.lat}, lon ${waypoint.lng}`);
-              });
-            })
-            .catch(error => console.error('Error fetching waypoints:', error));
-        },
-        getColorForIndex: function(index) {
-          const colors = ['red', 'blue', 'green', 'yellow', 'purple', 'orange'];
-          return colors[index % colors.length];
-        },
-        addDebugInfo: function() {
-          // ... (debug info code remains the same)
-        }
-      });
-    </script>
   </head>
   <body style="margin: 0; overflow: hidden;">
     <a-scene
       embedded
-      loading-screen="enabled: false;"
-      arjs="sourceType: webcam; debugUIEnabled: false;"
+      arjs="sourceType: webcam; debugUIEnabled: true;"
       vr-mode-ui="enabled: false"
-      waypoints-manager
-    > 
+    >
       <a-camera gps-new-camera rotation-reader></a-camera>
     </a-scene>
   </body>
