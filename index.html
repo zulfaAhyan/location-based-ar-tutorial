@@ -45,6 +45,34 @@
                 text.setAttribute('gps-entity-place', `latitude: ${waypoint.lat}; longitude: ${waypoint.lng}`);
                 this.el.sceneEl.appendChild(text);
                 console.log(`Added waypoint ${index + 1}: lat ${waypoint.lat}, lon ${waypoint.lng}`);
+              });
+            })
+            .catch(error => console.error('Error fetching waypoints:', error));
+        },
+        getColorForIndex: function(index) {
+          const colors = ['red', 'blue', 'green', 'yellow', 'purple', 'orange'];
+          return colors[index % colors.length];
+        },
+        addDebugInfo: function() {
+          const debugDiv = document.createElement('div');
+          debugDiv.setAttribute('id', 'debug-info');
+          debugDiv.style.position = 'absolute';
+          debugDiv.style.top = '10px';
+          debugDiv.style.left = '10px';
+          debugDiv.style.backgroundColor = 'rgba(0,0,0,0.7)';
+          debugDiv.style.color = 'white';
+          debugDiv.style.padding = '10px';
+          debugDiv.style.fontFamily = 'monospace';
+          debugDiv.style.zIndex = '9999';
+          document.body.appendChild(debugDiv);
+
+          const updateDebugInfo = () => {
+            if ('geolocation' in navigator) {
+              navigator.geolocation.getCurrentPosition((position) => {
+                debugDiv.innerHTML = `
+                  RouteId: ${this.getRouteId() || 'Not provided'}<br>
+                  Lat: ${position.coords.latitude.toFixed(6)}<br>
+                  Lon: ${position.coords.longitude.toFixed(6)}<br>
                   Accuracy: ${position.coords.accuracy.toFixed(2)}m<br>
                   Orientation: ${screen.orientation ? screen.orientation.type : 'N/A'}
                 `;
@@ -73,7 +101,7 @@
       arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3;"
       vr-mode-ui="enabled: false"
       waypoints-manager
-    >
+    > 
       <a-camera gps-camera rotation-reader></a-camera>
     </a-scene>
   </body>
