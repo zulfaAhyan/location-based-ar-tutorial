@@ -36,13 +36,13 @@
                   console.error(`Invalid coordinates for waypoint ${index + 1}`);
                   return;
                 }
-                const text = document.createElement('a-text');
-                text.setAttribute('value', `Point ${index + 1}`);
-                text.setAttribute('scale', '75 75 75');
-                text.setAttribute('align', 'center');
-                text.setAttribute('color', this.getColorForIndex(index));
-                text.setAttribute('look-at', '[gps-camera]');
-                text.setAttribute('gps-entity-place', `latitude: ${waypoint.lat}; longitude: ${waypoint.lng}`);
+                const box = document.createElement('a-box');
+                box.setAttribute('value', `Point ${index + 1}`);
+                box.setAttribute('scale', '1 1 1');
+                box.setAttribute('align', 'center');
+                box.setAttribute('color', this.getColorForIndex(index));
+                box.setAttribute('look-at', '[gps-camera]');
+                box.setAttribute('gps-entity-place', `latitude: ${waypoint.lat}; longitude: ${waypoint.lng}`);
                 this.el.sceneEl.appendChild(text);
                 console.log(`Added waypoint ${index + 1}: lat ${waypoint.lat}, lon ${waypoint.lng}`);
               });
