@@ -36,9 +36,9 @@
                   console.error(Invalid coordinates for waypoint ${index + 1});
                   return;
                 }
-                const text = document.createElement('a-text');
+                const text = document.createElement('a-box');
                 text.setAttribute('value', Point ${index + 1});
-                text.setAttribute('scale', '75 75 75');
+                text.setAttribute('scale', '1 1 1');
                 text.setAttribute('align', 'center');
                 text.setAttribute('color', this.getColorForIndex(index));
                 text.setAttribute('look-at', '[gps-camera]');
