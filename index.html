@@ -30,14 +30,48 @@
       border-radius: 20px;
       z-index: 9999;
     }
+    .debug-info {
+      position: fixed;
+      bottom: 10px;
+      left: 10px;
+      background: rgba(0, 0, 0, 0.8);
+      color: white;
+      padding: 10px;
+      border-radius: 5px;
+      z-index: 9999;
+      font-family: monospace;
+      max-width: 80vw;
+      word-wrap: break-word;
+    }
   </style>
   <script>
     AFRAME.registerComponent('waypoints-manager', {
       init: function () {
         this.showLoadingIndicator();
-        this.checkPermissions()
-          .then(() => this.loadWaypoints())
-          .catch(error => this.showError(error));
+        this.showDebugInfo('Initializing...');
+        
+        // Add delay to ensure debug info is visible
+        setTimeout(() => {
+          this.checkPermissions()
+            .then(() => {
+              this.showDebugInfo('Permissions granted, loading waypoints...');
+              return this.loadWaypoints();
+            })
+            .catch(error => {
+              this.showDebugInfo('Error: ' + error);
+              this.showError(error);
+            });
+        }, 1000);
+      },
+
+      showDebugInfo: function(message) {
+        if (!this.debugElement) {
+          this.debugElement = document.createElement('div');
+          this.debugElement.className = 'debug-info';
+          document.body.appendChild(this.debugElement);
+        }
+        this.debugElement.innerHTML += message + '<br>';
+        console.log('Debug:', message);
       },
 
       checkPermissions: function() {
@@ -47,18 +81,32 @@
             return;
           }
 
-          // Check GPS
+          this.showDebugInfo('Checking GPS...');
           navigator.geolocation.getCurrentPosition(
-            () => {
-              // Check camera
+            (position) => {
+              this.showDebugInfo(`GPS OK: ${position.coords.latitude}, ${position.coords.longitude}`);
+              
+              this.showDebugInfo('Checking camera...');
               navigator.mediaDevices.getUserMedia({ video: true })
                 .then(stream => {
                   stream.getTracks().forEach(track => track.stop());
+                  this.showDebugInfo('Camera OK');
                   resolve();
                 })
-                .catch(() => reject('Camera access denied'));
+                .catch((err) => {
+                  this.showDebugInfo('Camera Error: ' + err.message);
+                  reject('Camera access denied: ' + err.message);
+                });
             },
-            () => reject('GPS access denied')
+            (err) => {
+              this.showDebugInfo('GPS Error: ' + err.message);
+              reject('GPS access denied: ' + err.message);
+            },
+            { 
+              enableHighAccuracy: true,
+              timeout: 5000,
+              maximumAge: 0
+            }
           );
         });
       },
@@ -86,7 +134,9 @@
 
       getRouteId: function () {
         const urlParams = new URLSearchParams(window.location.search);
-        return urlParams.get('routeId');
+        const routeId = urlParams.get('routeId');
+        this.showDebugInfo(`Route ID: ${routeId}`);
+        return routeId;
       },
 
       loadWaypoints: function () {
@@ -98,15 +148,19 @@
         }
 
         const waypointsUrl = `https://waypoints-prht.onrender.com/get-waypoints/${routeId}`;
+        this.showDebugInfo(`Fetching waypoints from: ${waypointsUrl}`);
+
         fetch(waypointsUrl)
           .then(response => {
+            this.showDebugInfo(`Server response status: ${response.status}`);
             if (!response.ok) {
               throw new Error(`HTTP error! status: ${response.status}`);
             }
             return response.json();
           })
           .then(waypoints => {
-            console.log('Fetched waypoints:', waypoints);
+            this.showDebugInfo(`Fetched ${waypoints.length} waypoints`);
+            
             if (waypoints.length === 0) {
               this.showError('No waypoints found for this route');
               return;
@@ -114,41 +168,40 @@
 
             waypoints.forEach((waypoint, index) => {
               if (!waypoint.lat || !waypoint.lng) {
-                console.error(`Invalid coordinates for waypoint ${index + 1}`);
+                this.showDebugInfo(`Invalid coordinates for waypoint ${index + 1}`);
                 return;
               }
 
-              // Create container entity for better positioning
+              this.showDebugInfo(`Processing waypoint ${index + 1}: ${waypoint.lat}, ${waypoint.lng}`);
+
               const container = document.createElement('a-entity');
               container.setAttribute('gps-new-entity-place', {
                 latitude: waypoint.lat,
                 longitude: waypoint.lng
               });
 
-              // Add box
               const box = document.createElement('a-box');
               box.setAttribute('color', this.getColorForIndex(index));
-              box.setAttribute('scale', '0.5 0.5 0.5');  // Smaller scale
-              box.setAttribute('position', '0 1 0');  // Raise slightly above ground
+              box.setAttribute('scale', '0.5 0.5 0.5');
+              box.setAttribute('position', '0 1 0');
               
-              // Add text label
               const text = document.createElement('a-text');
               text.setAttribute('value', `Waypoint ${index + 1}`);
               text.setAttribute('scale', '1 1 1');
-              text.setAttribute('position', '0 1.5 0');  // Position above box
+              text.setAttribute('position', '0 1.5 0');
               text.setAttribute('align', 'center');
               text.setAttribute('color', 'white');
               
               container.appendChild(box);
               container.appendChild(text);
               this.el.sceneEl.appendChild(container);
-              
-              console.log(`Added waypoint ${index + 1}: lat ${waypoint.lat}, lon ${waypoint.lng}`);
             });
 
             this.hideLoadingIndicator();
+            this.showDebugInfo('Finished loading waypoints');
           })
           .catch(error => {
+            this.showDebugInfo('Error: ' + error.message);
             console.error('Error fetching waypoints:', error);
             this.hideLoadingIndicator();
             this.showError('Failed to load waypoints. Please try again.');
@@ -166,7 +219,7 @@
   <a-scene
     vr-mode-ui="enabled: false"
     embedded
-    arjs="sourceType: webcam; debugUIEnabled: false; sourceWidth: 1280; sourceHeight: 960; displayWidth: 1280; displayHeight: 960;"
+    arjs="sourceType: webcam; debugUIEnabled: true; sourceWidth: 1280; sourceHeight: 960; displayWidth: 1280; displayHeight: 960;"
     waypoints-manager
   >
     <a-camera gps-new-camera="gpsMinDistance: 5; positionMinAccuracy: 10"></a-camera>
