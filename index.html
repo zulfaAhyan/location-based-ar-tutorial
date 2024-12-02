@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>WebXR Waypoints Navigation</title>
   <script src="https://cdn.jsdelivr.net/npm/three@0.155.0/build/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.155.0/examples/js/webxr/VRButton.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.155.0/examples/js/webxr/ARButton.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.155.0/examples/js/webxr/XRControllerModelFactory.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.155.0/examples/js/loaders/GLTFLoader.js"></script>
 </head>
@@ -17,8 +17,13 @@
       // Initialize the scene, camera, and renderer
       const scene = new THREE.Scene();
       const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
-      const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      const renderer = new THREE.WebGLRenderer({ 
+        antialias: true, 
+        alpha: true,
+        logarithmicDepthBuffer: true  // Added for better AR performance
+      });
       renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(window.devicePixelRatio);
       renderer.xr.enabled = true;
       document.body.appendChild(renderer.domElement);
 
@@ -54,17 +59,29 @@
       }
 
       // Main AR session handling
-      function startAR() {
+      async function startAR() {
         try {
-          renderer.xr.setReferenceSpaceType("local");
-          // Use VRButton directly since it's loaded as a separate script
-          document.body.appendChild(VRButton.createButton(renderer));
-          renderer.setAnimationLoop(() => {
-            renderer.render(scene, camera);
-          });
+          // Check if AR is supported
+          if ('xr' in navigator) {
+            const isSupported = await navigator.xr.isSessionSupported('immersive-ar');
+            if (isSupported) {
+              document.body.appendChild(ARButton.createButton(renderer, {
+                requiredFeatures: ['hit-test'],
+                optionalFeatures: ['dom-overlay'],
+                domOverlay: { root: document.body }
+              }));
+              renderer.setAnimationLoop(() => {
+                renderer.render(scene, camera);
+              });
+            } else {
+              throw new Error('AR not supported on this device');
+            }
+          } else {
+            throw new Error('WebXR not supported in this browser');
+          }
         } catch (error) {
           console.error("Error starting AR session:", error);
-          alert("Failed to start AR session. Please make sure your device supports WebXR and you're using a compatible browser.");
+          alert(`AR Error: ${error.message}`);
         }
       }
 
@@ -86,9 +103,9 @@
       }
 
       // Set up the AR session on button click
-      document.getElementById("enter-ar").addEventListener("click", () => {
-        startAR();
-        initWaypoints();
+      document.getElementById("enter-ar").addEventListener("click", async () => {
+        await startAR();
+        await initWaypoints();
         document.getElementById("enter-ar").style.display = "none";
       });
 
