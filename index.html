@@ -20,7 +20,13 @@
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.xr.enabled = true;
+
+    // Add the renderer to the document
     document.body.appendChild(renderer.domElement);
+
+    // Add VRButton to the renderer
+    const vrButton = VRButton.createButton(renderer);
+    document.body.appendChild(vrButton);
 
     // Add a light source
     const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
@@ -55,15 +61,6 @@
       scene.add(marker);
     }
 
-    // Main AR session handling
-    function startAR() {
-      renderer.xr.setReferenceSpaceType("local");
-      document.body.appendChild(VRButton.createButton(renderer));
-      renderer.setAnimationLoop(() => {
-        renderer.render(scene, camera);
-      });
-    }
-
     // Add waypoints to the scene
     async function initWaypoints() {
       const waypoints = await loadWaypoints();
@@ -82,10 +79,18 @@
       });
     }
 
-    // Set up the AR session on button click
+    // Set up the AR session
+    function startAR() {
+      renderer.xr.setReferenceSpaceType("local");
+      renderer.setAnimationLoop(() => {
+        renderer.render(scene, camera);
+      });
+      initWaypoints();
+    }
+
+    // Attach event listener to the "Enter AR" button
     document.getElementById("enter-ar").addEventListener("click", () => {
       startAR();
-      initWaypoints();
       document.getElementById("enter-ar").style.display = "none";
     });
 
