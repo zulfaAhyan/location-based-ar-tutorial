@@ -36,9 +36,9 @@
                   console.error(Invalid coordinates for waypoint ${index + 1});
                   return;
                 }
-                const text = document.createElement('a-box');
+                const text = document.createElement('a-text');
                 text.setAttribute('value', Point ${index + 1});
-                text.setAttribute('scale', '1 1 1');
+                text.setAttribute('scale', '75 75 75');
                 text.setAttribute('align', 'center');
                 text.setAttribute('color', this.getColorForIndex(index));
                 text.setAttribute('look-at', '[gps-camera]');
@@ -102,7 +102,7 @@
       vr-mode-ui="enabled: false"
       waypoints-manager
     > 
-      <a-camera gps-camera="gpsMinDistance: 5" rotation-reader camera="fov: 75"></a-camera>
+      <a-camera gps-camera rotation-reader></a-camera>
     </a-scene>
   </body>
 </html>
