@@ -4,109 +4,123 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>WebXR Waypoints Navigation</title>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.155.0/build/three.min.js"></script>
-  <!-- Changed from VRButton to ARButton -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.155.0/examples/js/webxr/ARButton.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.155.0/examples/js/webxr/XRControllerModelFactory.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.155.0/examples/js/loaders/GLTFLoader.js"></script>
+  <!-- Changed to ES modules version -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.155.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.155.0/examples/jsm/"
+      }
+    }
+  </script>
+  <script type="module">
+    import * as THREE from 'three';
+    import { ARButton } from 'three/addons/webxr/ARButton.js';
+
+    // Initialize the scene, camera, and renderer
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ 
+      antialias: true, 
+      alpha: true,
+      logarithmicDepthBuffer: true
+    });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.xr.enabled = true;
+    document.body.appendChild(renderer.domElement);
+
+    // Add a light source
+    const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
+    scene.add(light);
+
+    // Function to load waypoints
+    async function loadWaypoints() {
+      const routeId = new URLSearchParams(window.location.search).get('routeId');
+      if (!routeId) {
+        console.error("Route ID not provided");
+        return [];
+      }
+      try {
+        const response = await fetch(`https://waypoints-prht.onrender.com/get-waypoints/${routeId}`);
+        return response.json();
+      } catch (error) {
+        console.error("Error fetching waypoints:", error);
+        return [];
+      }
+    }
+
+    // Create waypoint markers
+    function createWaypointMarker(lat, lng, color) {
+      const geometry = new THREE.BoxGeometry(0.5, 0.5, 0.5);
+      const material = new THREE.MeshStandardMaterial({ color });
+      const marker = new THREE.Mesh(geometry, material);
+      const scale = 1000;
+      marker.position.set(lng * scale, 0, lat * scale);
+      scene.add(marker);
+    }
+
+    // Main AR session handling
+    async function startAR() {
+      try {
+        if ('xr' in navigator) {
+          const isSupported = await navigator.xr.isSessionSupported('immersive-ar');
+          if (isSupported) {
+            const arButton = ARButton.createButton(renderer, {
+              requiredFeatures: ['hit-test'],
+              optionalFeatures: ['dom-overlay'],
+              domOverlay: { root: document.body }
+            });
+            document.body.appendChild(arButton);
+            
+            renderer.setAnimationLoop(() => {
+              renderer.render(scene, camera);
+            });
+          } else {
+            throw new Error('AR not supported on this device');
+          }
+        } else {
+          throw new Error('WebXR not supported in this browser');
+        }
+      } catch (error) {
+        console.error("Error starting AR session:", error);
+        alert(`AR Error: ${error.message}`);
+      }
+    }
+
+    // Add waypoints to the scene
+    async function initWaypoints() {
+      const waypoints = await loadWaypoints();
+      if (waypoints.length === 0) {
+        console.warn("No waypoints found.");
+        return;
+      }
+      waypoints.forEach((wp, index) => {
+        if (wp.lat && wp.lng) {
+          const colors = ["red", "blue", "green", "yellow", "purple", "orange"];
+          createWaypointMarker(wp.lat, wp.lng, colors[index % colors.length]);
+        } else {
+          console.warn(`Waypoint ${index} has invalid coordinates.`);
+        }
+      });
+    }
+
+    // Set up the AR session on button click
+    document.getElementById("enter-ar").addEventListener("click", async () => {
+      await startAR();
+      await initWaypoints();
+      document.getElementById("enter-ar").style.display = "none";
+    });
+
+    // Handle window resizing
+    window.addEventListener("resize", () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
 </head>
 <body style="margin: 0; overflow: hidden;">
   <button id="enter-ar" style="position: absolute; top: 10px; left: 10px; z-index: 999;">Enter AR</button>
-  <script>
-    window.addEventListener('load', () => {
-      const scene = new THREE.Scene();
-      const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
-      const renderer = new THREE.WebGLRenderer({ 
-        antialias: true, 
-        alpha: true,
-        logarithmicDepthBuffer: true
-      });
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      renderer.setPixelRatio(window.devicePixelRatio);
-      renderer.xr.enabled = true;
-      document.body.appendChild(renderer.domElement);
-
-      const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
-      scene.add(light);
-
-      async function loadWaypoints() {
-        const routeId = new URLSearchParams(window.location.search).get('routeId');
-        if (!routeId) {
-          console.error("Route ID not provided");
-          return [];
-        }
-        try {
-          const response = await fetch(`https://waypoints-prht.onrender.com/get-waypoints/${routeId}`);
-          return response.json();
-        } catch (error) {
-          console.error("Error fetching waypoints:", error);
-          return [];
-        }
-      }
-
-      function createWaypointMarker(lat, lng, color) {
-        const geometry = new THREE.BoxGeometry(0.5, 0.5, 0.5);
-        const material = new THREE.MeshStandardMaterial({ color });
-        const marker = new THREE.Mesh(geometry, material);
-        const scale = 1000;
-        marker.position.set(lng * scale, 0, lat * scale);
-        scene.add(marker);
-      }
-
-      async function startAR() {
-        try {
-          if ('xr' in navigator) {
-            const isSupported = await navigator.xr.isSessionSupported('immersive-ar');
-            if (isSupported) {
-              // Changed to use THREE.ARButton instead of ARButton
-              document.body.appendChild(THREE.ARButton.createButton(renderer, {
-                requiredFeatures: ['hit-test'],
-                optionalFeatures: ['dom-overlay'],
-                domOverlay: { root: document.body }
-              }));
-              renderer.setAnimationLoop(() => {
-                renderer.render(scene, camera);
-              });
-            } else {
-              throw new Error('AR not supported on this device');
-            }
-          } else {
-            throw new Error('WebXR not supported in this browser');
-          }
-        } catch (error) {
-          console.error("Error starting AR session:", error);
-          alert(`AR Error: ${error.message}`);
-        }
-      }
-
-      async function initWaypoints() {
-        const waypoints = await loadWaypoints();
-        if (waypoints.length === 0) {
-          console.warn("No waypoints found.");
-          return;
-        }
-        waypoints.forEach((wp, index) => {
-          if (wp.lat && wp.lng) {
-            const colors = ["red", "blue", "green", "yellow", "purple", "orange"];
-            createWaypointMarker(wp.lat, wp.lng, colors[index % colors.length]);
-          } else {
-            console.warn(`Waypoint ${index} has invalid coordinates.`);
-          }
-        });
-      }
-
-      document.getElementById("enter-ar").addEventListener("click", async () => {
-        await startAR();
-        await initWaypoints();
-        document.getElementById("enter-ar").style.display = "none";
-      });
-
-      window.addEventListener("resize", () => {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-      });
-    });
-  </script>
 </body>
 </html>
