@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>WebXR Waypoints Navigation</title>
-  <!-- Changed to ES modules version -->
   <script type="importmap">
     {
       "imports": {
@@ -34,7 +33,15 @@
     const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
     scene.add(light);
 
-    // Function to load waypoints
+    // Debug cube to verify scene rendering
+    const debugCube = new THREE.Mesh(
+      new THREE.BoxGeometry(0.2, 0.2, 0.2),
+      new THREE.MeshStandardMaterial({ color: 'red' })
+    );
+    debugCube.position.set(0, 0, -1); // Position it 1 meter in front of the camera
+    scene.add(debugCube);
+
+    // Function to load waypoints with debug logging
     async function loadWaypoints() {
       const routeId = new URLSearchParams(window.location.search).get('routeId');
       if (!routeId) {
@@ -43,20 +50,28 @@
       }
       try {
         const response = await fetch(`https://waypoints-prht.onrender.com/get-waypoints/${routeId}`);
-        return response.json();
+        const data = await response.json();
+        console.log("Loaded waypoints:", data); // Debug log
+        return data;
       } catch (error) {
         console.error("Error fetching waypoints:", error);
         return [];
       }
     }
 
-    // Create waypoint markers
+    // Create waypoint markers with adjusted scale and debug logging
     function createWaypointMarker(lat, lng, color) {
-      const geometry = new THREE.BoxGeometry(0.5, 0.5, 0.5);
+      const geometry = new THREE.BoxGeometry(0.2, 0.2, 0.2); // Smaller size (20cm cubes)
       const material = new THREE.MeshStandardMaterial({ color });
       const marker = new THREE.Mesh(geometry, material);
-      const scale = 1000;
-      marker.position.set(lng * scale, 0, lat * scale);
+      
+      // Adjust scale factor - start with a smaller scale
+      const scale = 0.1; // Reduced from 1000 to 0.1
+      const x = lng * scale;
+      const z = lat * scale;
+      
+      marker.position.set(x, 0, z);
+      console.log(`Created marker at position: ${x}, 0, ${z}`); // Debug log
       scene.add(marker);
     }
 
@@ -73,6 +88,7 @@
             });
             document.body.appendChild(arButton);
             
+            // Modified animation loop with debug info
             renderer.setAnimationLoop(() => {
               renderer.render(scene, camera);
             });
@@ -88,15 +104,19 @@
       }
     }
 
-    // Add waypoints to the scene
+    // Add waypoints to the scene with debug logging
     async function initWaypoints() {
       const waypoints = await loadWaypoints();
+      console.log("Number of waypoints:", waypoints.length); // Debug log
+      
       if (waypoints.length === 0) {
         console.warn("No waypoints found.");
         return;
       }
+      
       waypoints.forEach((wp, index) => {
         if (wp.lat && wp.lng) {
+          console.log(`Processing waypoint ${index}:`, wp); // Debug log
           const colors = ["red", "blue", "green", "yellow", "purple", "orange"];
           createWaypointMarker(wp.lat, wp.lng, colors[index % colors.length]);
         } else {
