@@ -33,15 +33,7 @@
     const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
     scene.add(light);
 
-    // Debug cube to verify scene rendering
-    const debugCube = new THREE.Mesh(
-      new THREE.BoxGeometry(0.2, 0.2, 0.2),
-      new THREE.MeshStandardMaterial({ color: 'red' })
-    );
-    debugCube.position.set(0, 0, -1); // Position it 1 meter in front of the camera
-    scene.add(debugCube);
-
-    // Function to load waypoints with debug logging
+    // Function to load waypoints
     async function loadWaypoints() {
       const routeId = new URLSearchParams(window.location.search).get('routeId');
       if (!routeId) {
@@ -51,7 +43,7 @@
       try {
         const response = await fetch(`https://waypoints-prht.onrender.com/get-waypoints/${routeId}`);
         const data = await response.json();
-        console.log("Loaded waypoints:", data); // Debug log
+        console.log("Loaded waypoints:", data);
         return data;
       } catch (error) {
         console.error("Error fetching waypoints:", error);
@@ -59,20 +51,47 @@
       }
     }
 
-    // Create waypoint markers with adjusted scale and debug logging
-    function createWaypointMarker(lat, lng, color) {
-      const geometry = new THREE.BoxGeometry(0.2, 0.2, 0.2); // Smaller size (20cm cubes)
+    // Function to calculate relative positions from GPS coordinates
+    function calculateRelativePosition(lat1, lon1, lat2, lon2) {
+      const R = 6371; // Earth's radius in km
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      
+      // Convert to meters and scale for AR visibility
+      const x = dLon * R * 1000;
+      const z = dLat * R * 1000;
+      
+      return { x, z };
+    }
+
+    // Create waypoint markers with path visualization
+    function createWaypointMarker(position, color, index) {
+      // Create marker cube
+      const geometry = new THREE.BoxGeometry(0.2, 0.5, 0.2);
       const material = new THREE.MeshStandardMaterial({ color });
       const marker = new THREE.Mesh(geometry, material);
+      marker.position.set(position.x, 0, position.z);
       
-      // Adjust scale factor - start with a smaller scale
-      const scale = 0.1; // Reduced from 1000 to 0.1
-      const x = lng * scale;
-      const z = lat * scale;
+      // Add index number floating above
+      const textGeometry = new THREE.TextGeometry(`${index + 1}`, {
+        size: 0.2,
+        height: 0.02
+      });
+      const textMaterial = new THREE.MeshBasicMaterial({ color: 'white' });
+      const textMesh = new THREE.Mesh(textGeometry, textMaterial);
+      textMesh.position.set(0, 0.6, 0);
+      marker.add(textMesh);
       
-      marker.position.set(x, 0, z);
-      console.log(`Created marker at position: ${x}, 0, ${z}`); // Debug log
       scene.add(marker);
+      return marker;
+    }
+
+    // Create line between waypoints
+    function createPathLine(points) {
+      const material = new THREE.LineBasicMaterial({ color: 0x00ff00, linewidth: 2 });
+      const geometry = new THREE.BufferGeometry().setFromPoints(points);
+      const line = new THREE.Line(geometry, material);
+      scene.add(line);
     }
 
     // Main AR session handling
@@ -88,7 +107,6 @@
             });
             document.body.appendChild(arButton);
             
-            // Modified animation loop with debug info
             renderer.setAnimationLoop(() => {
               renderer.render(scene, camera);
             });
@@ -104,25 +122,51 @@
       }
     }
 
-    // Add waypoints to the scene with debug logging
+    // Add waypoints to the scene with path visualization
     async function initWaypoints() {
       const waypoints = await loadWaypoints();
-      console.log("Number of waypoints:", waypoints.length); // Debug log
-      
       if (waypoints.length === 0) {
         console.warn("No waypoints found.");
         return;
       }
+
+      // Calculate relative positions for all waypoints
+      const positions = [];
+      const colors = ["red", "blue", "green", "yellow", "purple", "orange"];
+      let firstWaypoint = null;
       
       waypoints.forEach((wp, index) => {
         if (wp.lat && wp.lng) {
-          console.log(`Processing waypoint ${index}:`, wp); // Debug log
-          const colors = ["red", "blue", "green", "yellow", "purple", "orange"];
-          createWaypointMarker(wp.lat, wp.lng, colors[index % colors.length]);
-        } else {
-          console.warn(`Waypoint ${index} has invalid coordinates.`);
+          if (!firstWaypoint) {
+            firstWaypoint = wp;
+            positions.push({ x: 0, z: 0 }); // First waypoint at origin
+          } else {
+            // Calculate position relative to first waypoint
+            const pos = calculateRelativePosition(
+              firstWaypoint.lat, firstWaypoint.lng,
+              wp.lat, wp.lng
+            );
+            positions.push(pos);
+          }
         }
       });
+
+      // Scale down the positions if they're too far apart
+      const scale = 0.1; // Adjust this value to change the overall scale of the path
+      positions.forEach(pos => {
+        pos.x *= scale;
+        pos.z *= scale;
+      });
+
+      // Create markers and path
+      const markerPoints = [];
+      positions.forEach((pos, index) => {
+        const marker = createWaypointMarker(pos, colors[index % colors.length], index);
+        markerPoints.push(new THREE.Vector3(pos.x, 0, pos.z));
+      });
+
+      // Create the path line connecting all points
+      createPathLine(markerPoints);
     }
 
     // Set up the AR session on button click
