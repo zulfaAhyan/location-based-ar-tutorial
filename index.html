@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>WebXR Waypoints Navigation</title>
+  <title>WebXR Outdoor Navigation</title>
   <script type="importmap">
     {
       "imports": {
@@ -16,7 +16,6 @@
     import * as THREE from 'three';
     import { ARButton } from 'three/addons/webxr/ARButton.js';
 
-    // Initialize the scene, camera, and renderer
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
     const renderer = new THREE.WebGLRenderer({ 
@@ -29,7 +28,6 @@
     renderer.xr.enabled = true;
     document.body.appendChild(renderer.domElement);
 
-    // Add a light source
     const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
     scene.add(light);
 
@@ -51,57 +49,83 @@
       }
     }
 
-    // Function to calculate relative positions from GPS coordinates
+    // Enhanced function to calculate real-world distances
     function calculateRelativePosition(lat1, lon1, lat2, lon2) {
-      const R = 6371; // Earth's radius in km
-      const dLat = (lat2 - lat1) * Math.PI / 180;
-      const dLon = (lon2 - lon1) * Math.PI / 180;
-      
-      // Convert to meters and scale for AR visibility
-      const x = dLon * R * 1000;
-      const z = dLat * R * 1000;
-      
-      return { x, z };
+      const R = 6371000; // Earth's radius in meters
+      const φ1 = lat1 * Math.PI / 180;
+      const φ2 = lat2 * Math.PI / 180;
+      const Δφ = (lat2 - lat1) * Math.PI / 180;
+      const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+      const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+                Math.cos(φ1) * Math.cos(φ2) *
+                Math.sin(Δλ/2) * Math.sin(Δλ/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      const d = R * c;
+
+      // Calculate x (East-West) and z (North-South) components
+      const z = Math.sin(Δφ) * R;
+      const x = Math.cos(φ1) * Math.sin(Δλ) * R;
+
+      return { x, z, distance: d };
     }
 
-    // Create waypoint markers with path visualization
-    function createWaypointMarker(position, color, index) {
-      // Create marker cube
-      const geometry = new THREE.BoxGeometry(0.2, 0.5, 0.2);
+    // Enhanced waypoint marker creation with distance labels
+    function createWaypointMarker(position, color, index, distance) {
+      const group = new THREE.Group();
+
+      // Larger marker for better visibility
+      const geometry = new THREE.CylinderGeometry(0.5, 0.5, 2, 32);
       const material = new THREE.MeshStandardMaterial({ color });
       const marker = new THREE.Mesh(geometry, material);
-      marker.position.set(position.x, 0, position.z);
+      marker.position.set(0, 1, 0); // Raise marker above ground
+      group.add(marker);
 
-      // Add a floating cylinder above the marker for better visibility
-      const topCylinder = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.1, 0.1, 0.1, 8),
-        new THREE.MeshStandardMaterial({ color: 'white' })
-      );
-      topCylinder.position.y = 0.3;
-      marker.add(topCylinder);
-      
-      scene.add(marker);
-      return marker;
+      // Add floating beacon light
+      const beaconGeometry = new THREE.SphereGeometry(0.3, 32, 32);
+      const beaconMaterial = new THREE.MeshStandardMaterial({
+        color: 'white',
+        emissive: color,
+        emissiveIntensity: 0.5
+      });
+      const beacon = new THREE.Mesh(beaconGeometry, beaconMaterial);
+      beacon.position.set(0, 2.5, 0);
+      group.add(beacon);
+
+      // Animate beacon
+      const animate = () => {
+        beacon.position.y = 2.5 + Math.sin(Date.now() * 0.003) * 0.2;
+        requestAnimationFrame(animate);
+      };
+      animate();
+
+      // Position the entire group
+      group.position.set(position.x, 0, position.z);
+      scene.add(group);
+      return group;
     }
 
-    // Create line between waypoints
+    // Enhanced path visualization
     function createPathLine(points) {
+      // Create elevated path line
       const material = new THREE.LineBasicMaterial({ 
         color: 0x00ff00,
-        linewidth: 2,
+        linewidth: 3,
         transparent: true,
-        opacity: 0.7
+        opacity: 0.8
       });
-      const geometry = new THREE.BufferGeometry().setFromPoints(points);
+      
+      // Elevate the path for better visibility
+      const elevatedPoints = points.map(p => new THREE.Vector3(p.x, 1.5, p.z));
+      const geometry = new THREE.BufferGeometry().setFromPoints(elevatedPoints);
       const line = new THREE.Line(geometry, material);
       scene.add(line);
 
-      // Add arrow markers along the path
+      // Add direction arrows
       for (let i = 0; i < points.length - 1; i++) {
         const start = points[i];
         const end = points[i + 1];
         
-        // Create direction arrow
         const direction = new THREE.Vector3()
           .subVectors(end, start)
           .normalize();
@@ -111,18 +135,17 @@
           .multiplyScalar(0.5);
         
         const arrow = new THREE.Mesh(
-          new THREE.ConeGeometry(0.05, 0.2, 8),
+          new THREE.ConeGeometry(0.2, 0.6, 8),
           new THREE.MeshStandardMaterial({ color: 0x00ff00 })
         );
         
-        arrow.position.copy(midpoint);
+        arrow.position.set(midpoint.x, 1.5, midpoint.z);
         arrow.lookAt(end);
         arrow.rotateX(Math.PI / 2);
         scene.add(arrow);
       }
     }
 
-    // Main AR session handling
     async function startAR() {
       try {
         if ('xr' in navigator) {
@@ -150,7 +173,6 @@
       }
     }
 
-    // Add waypoints to the scene with path visualization
     async function initWaypoints() {
       const waypoints = await loadWaypoints();
       if (waypoints.length === 0) {
@@ -158,53 +180,54 @@
         return;
       }
 
-      // Calculate relative positions for all waypoints
       const positions = [];
       const colors = ["red", "blue", "green", "yellow", "purple", "orange"];
       let firstWaypoint = null;
+      let totalDistance = 0;
       
       waypoints.forEach((wp, index) => {
         if (wp.lat && wp.lng) {
           if (!firstWaypoint) {
             firstWaypoint = wp;
-            positions.push({ x: 0, z: 0 }); // First waypoint at origin
+            positions.push({ x: 0, z: 0, distance: 0 });
           } else {
-            // Calculate position relative to first waypoint
             const pos = calculateRelativePosition(
               firstWaypoint.lat, firstWaypoint.lng,
               wp.lat, wp.lng
             );
+            totalDistance += pos.distance;
             positions.push(pos);
           }
         }
       });
 
-      // Scale down the positions if they're too far apart
-      const scale = 0.1; // Adjust this value to change the overall scale of the path
-      positions.forEach(pos => {
-        pos.x *= scale;
-        pos.z *= scale;
-      });
-
-      // Create markers and path
+      // Use real-world scale with minor adjustment for AR visibility
+      const scale = 0.5; // 1 unit = 2 meters
       const markerPoints = [];
+      
       positions.forEach((pos, index) => {
-        const marker = createWaypointMarker(pos, colors[index % colors.length], index);
-        markerPoints.push(new THREE.Vector3(pos.x, 0, pos.z));
+        const scaledPos = {
+          x: pos.x * scale,
+          z: pos.z * scale
+        };
+        const marker = createWaypointMarker(
+          scaledPos, 
+          colors[index % colors.length], 
+          index,
+          pos.distance
+        );
+        markerPoints.push(scaledPos);
       });
 
-      // Create the path line connecting all points
       createPathLine(markerPoints);
     }
 
-    // Set up the AR session on button click
     document.getElementById("enter-ar").addEventListener("click", async () => {
       await startAR();
       await initWaypoints();
       document.getElementById("enter-ar").style.display = "none";
     });
 
-    // Handle window resizing
     window.addEventListener("resize", () => {
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
