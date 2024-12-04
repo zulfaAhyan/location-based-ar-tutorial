@@ -16,7 +16,6 @@
     body {
       margin: 0;
       overflow: hidden;
-      font-family: Arial, sans-serif;
     }
     #enter-ar {
       position: absolute;
@@ -24,9 +23,9 @@
       left: 10px;
       z-index: 999;
       padding: 10px 20px;
-      font-size: calc(1rem + 0.5vw);
+      font-size: 16px;
       background: #007bff;
-      color: #fff;
+      color: white;
       border: none;
       border-radius: 5px;
       cursor: pointer;
@@ -41,11 +40,7 @@
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
-    const renderer = new THREE.WebGLRenderer({
-      antialias: true,
-      alpha: true,
-      logarithmicDepthBuffer: true
-    });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.xr.enabled = true;
@@ -53,6 +48,8 @@
 
     const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
     scene.add(light);
+
+    let referenceSpace = null;
 
     async function loadWaypoints() {
       const routeId = new URLSearchParams(window.location.search).get('routeId');
@@ -63,9 +60,7 @@
       try {
         const response = await fetch(`https://waypoints-prht.onrender.com/get-waypoints/${routeId}`);
         if (!response.ok) throw new Error(`Failed to fetch waypoints: ${response.statusText}`);
-        const data = await response.json();
-        console.log("Loaded waypoints:", data);
-        return data;
+        return await response.json();
       } catch (error) {
         console.error("Error fetching waypoints:", error);
         return [];
@@ -73,81 +68,77 @@
     }
 
     function calculateRelativePosition(lat1, lon1, lat2, lon2) {
-      const R = 6371000; // Earth's radius in meters
+      const R = 6371000;
       const φ1 = lat1 * Math.PI / 180;
       const φ2 = lat2 * Math.PI / 180;
       const Δφ = (lat2 - lat1) * Math.PI / 180;
       const Δλ = (lon2 - lon1) * Math.PI / 180;
 
-      const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
-                Math.cos(φ1) * Math.cos(φ2) *
-                Math.sin(Δλ/2) * Math.sin(Δλ/2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-      const d = R * c;
-
-      const z = Math.sin(Δφ) * R;
       const x = Math.cos(φ1) * Math.sin(Δλ) * R;
+      const z = Math.sin(Δφ) * R;
 
-      return { x, z, distance: d };
+      return { x, z };
     }
 
     function createWaypointMarker(position, color) {
-      const group = new THREE.Group();
-      const geometry = new THREE.CylinderGeometry(0.5, 0.5, 2, 32);
+      const geometry = new THREE.CylinderGeometry(0.2, 0.2, 1, 32);
       const material = new THREE.MeshStandardMaterial({ color });
       const marker = new THREE.Mesh(geometry, material);
-      marker.position.set(0, 1, 0);
-      group.add(marker);
-
-      const beaconGeometry = new THREE.SphereGeometry(0.3, 32, 32);
-      const beaconMaterial = new THREE.MeshStandardMaterial({
-        color: 'white',
-        emissive: color,
-        emissiveIntensity: 0.5
-      });
-      const beacon = new THREE.Mesh(beaconGeometry, beaconMaterial);
-      beacon.position.set(0, 2.5, 0);
-      group.add(beacon);
-
-      const animate = () => {
-        beacon.position.y = 2.5 + Math.sin(Date.now() * 0.003) * 0.2;
-        requestAnimationFrame(animate);
-      };
-      animate();
-
-      group.position.set(position.x, 0, position.z);
-      scene.add(group);
-      return group;
+      marker.position.set(position.x, 0.5, position.z);
+      scene.add(marker);
+      return marker;
     }
 
     function createPathLine(points) {
-      const material = new THREE.LineBasicMaterial({
-        color: 0x00ff00,
-        linewidth: 3,
-        transparent: true,
-        opacity: 0.8
-      });
-
-      const elevatedPoints = points.map(p => new THREE.Vector3(p.x, 1.5, p.z));
-      const geometry = new THREE.BufferGeometry().setFromPoints(elevatedPoints);
+      const material = new THREE.LineBasicMaterial({ color: 0x00ff00, linewidth: 3 });
+      const geometry = new THREE.BufferGeometry().setFromPoints(points);
       const line = new THREE.Line(geometry, material);
       scene.add(line);
     }
 
+    async function initWaypoints() {
+      const waypoints = await loadWaypoints();
+      if (!waypoints.length) {
+        console.warn("No waypoints found.");
+        return;
+      }
+
+      const origin = waypoints[0];
+      const positions = waypoints.map((wp) => {
+        const pos = calculateRelativePosition(origin.lat, origin.lng, wp.lat, wp.lng);
+        return new THREE.Vector3(pos.x * 0.5, 0, pos.z * 0.5);
+      });
+
+      positions.forEach((pos, index) => {
+        createWaypointMarker(pos, index % 2 === 0 ? 'red' : 'blue');
+      });
+
+      createPathLine(positions);
+    }
+
     async function startAR() {
       try {
-        if (!('xr' in navigator)) throw new Error('WebXR not supported in this browser');
+        if (!('xr' in navigator)) throw new Error("WebXR not supported on this device.");
         const isSupported = await navigator.xr.isSessionSupported('immersive-ar');
-        if (!isSupported) throw new Error('AR not supported on this device');
-        
+        if (!isSupported) throw new Error("AR not supported on this device.");
+
         const arButton = ARButton.createButton(renderer, {
-          requiredFeatures: ['hit-test'],
+          requiredFeatures: ['local-floor', 'bounded-floor'],
           optionalFeatures: ['dom-overlay'],
           domOverlay: { root: document.body }
         });
         document.body.appendChild(arButton);
 
-        renderer.setAnimationLoop(() => {
+        referenceSpace = await renderer.xr.getSession().requestReferenceSpace('local-floor');
+
+        renderer.setAnimationLoop((time, frame) => {
+          if (frame) {
+            const viewerPose = frame.getViewerPose(referenceSpace);
+            if (viewerPose) {
+              const position = viewerPose.transform.position;
+              camera.position.set(position.x, position.y, position.z);
+            }
+          }
           renderer.render(scene, camera);
         });
       } catch (error) {
@@ -156,39 +147,13 @@
       }
     }
 
-    async function initWaypoints() {
-      const waypoints = await loadWaypoints();
-      if (waypoints.length === 0) return;
-
-      const positions = [];
-      let firstWaypoint = null;
-      waypoints.forEach((wp) => {
-        if (!firstWaypoint) {
-          firstWaypoint = wp;
-          positions.push({ x: 0, z: 0 });
-        } else {
-          const pos = calculateRelativePosition(
-            firstWaypoint.lat, firstWaypoint.lng, wp.lat, wp.lng
-          );
-          positions.push({ x: pos.x * 0.5, z: pos.z * 0.5 }); // Adjust scale
-        }
-      });
-
-      const colors = ["red", "blue", "green", "yellow", "purple", "orange"];
-      positions.forEach((pos, index) => {
-        createWaypointMarker(pos, colors[index % colors.length]);
-      });
-
-      createPathLine(positions);
-    }
-
-    document.getElementById("enter-ar").addEventListener("click", async () => {
+    document.getElementById('enter-ar').addEventListener('click', async () => {
       await startAR();
       await initWaypoints();
-      document.getElementById("enter-ar").style.display = "none";
+      document.getElementById('enter-ar').style.display = 'none';
     });
 
-    window.addEventListener("resize", () => {
+    window.addEventListener('resize', () => {
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
