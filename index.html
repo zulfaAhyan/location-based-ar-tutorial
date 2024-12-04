@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>WebXR Outdoor Navigation</title>
+  <title>WebXR Navigation Debug</title>
   <script type="importmap">
     {
       "imports": {
@@ -51,74 +51,10 @@
 
     let referenceSpace = null;
 
-    async function loadWaypoints() {
-      const routeId = new URLSearchParams(window.location.search).get('routeId');
-      if (!routeId) {
-        console.error("Route ID not provided");
-        return [];
-      }
-      try {
-        const response = await fetch(`https://waypoints-prht.onrender.com/get-waypoints/${routeId}`);
-        if (!response.ok) throw new Error(`Failed to fetch waypoints: ${response.statusText}`);
-        return await response.json();
-      } catch (error) {
-        console.error("Error fetching waypoints:", error);
-        return [];
-      }
-    }
-
-    function calculateRelativePosition(lat1, lon1, lat2, lon2) {
-      const R = 6371000;
-      const φ1 = lat1 * Math.PI / 180;
-      const φ2 = lat2 * Math.PI / 180;
-      const Δφ = (lat2 - lat1) * Math.PI / 180;
-      const Δλ = (lon2 - lon1) * Math.PI / 180;
-
-      const x = Math.cos(φ1) * Math.sin(Δλ) * R;
-      const z = Math.sin(Δφ) * R;
-
-      return { x, z };
-    }
-
-    function createWaypointMarker(position, color) {
-      const geometry = new THREE.CylinderGeometry(0.2, 0.2, 1, 32);
-      const material = new THREE.MeshStandardMaterial({ color });
-      const marker = new THREE.Mesh(geometry, material);
-      marker.position.set(position.x, 0.5, position.z);
-      scene.add(marker);
-      return marker;
-    }
-
-    function createPathLine(points) {
-      const material = new THREE.LineBasicMaterial({ color: 0x00ff00, linewidth: 3 });
-      const geometry = new THREE.BufferGeometry().setFromPoints(points);
-      const line = new THREE.Line(geometry, material);
-      scene.add(line);
-    }
-
-    async function initWaypoints() {
-      const waypoints = await loadWaypoints();
-      if (!waypoints.length) {
-        console.warn("No waypoints found.");
-        return;
-      }
-
-      const origin = waypoints[0];
-      const positions = waypoints.map((wp) => {
-        const pos = calculateRelativePosition(origin.lat, origin.lng, wp.lat, wp.lng);
-        return new THREE.Vector3(pos.x * 0.5, 0, pos.z * 0.5);
-      });
-
-      positions.forEach((pos, index) => {
-        createWaypointMarker(pos, index % 2 === 0 ? 'red' : 'blue');
-      });
-
-      createPathLine(positions);
-    }
-
     async function startAR() {
       try {
         if (!('xr' in navigator)) throw new Error("WebXR not supported on this device.");
+
         const isSupported = await navigator.xr.isSessionSupported('immersive-ar');
         if (!isSupported) throw new Error("AR not supported on this device.");
 
@@ -129,18 +65,28 @@
         });
         document.body.appendChild(arButton);
 
-        referenceSpace = await renderer.xr.getSession().requestReferenceSpace('local-floor');
-
-        renderer.setAnimationLoop((time, frame) => {
-          if (frame) {
-            const viewerPose = frame.getViewerPose(referenceSpace);
-            if (viewerPose) {
-              const position = viewerPose.transform.position;
-              camera.position.set(position.x, position.y, position.z);
-            }
-          }
-          renderer.render(scene, camera);
+        // Wait for the XR session to be active
+        renderer.xr.getSession().addEventListener('end', () => {
+          console.log("XR Session ended.");
         });
+
+        renderer.xr.getSession().addEventListener('select', () => {
+          console.log("AR Interaction detected.");
+        });
+
+        const xrSession = renderer.xr.getSession();
+        if (xrSession) {
+          try {
+            referenceSpace = await xrSession.requestReferenceSpace('local-floor');
+          } catch {
+            console.warn("'local-floor' not supported. Falling back to 'local'.");
+            referenceSpace = await xrSession.requestReferenceSpace('local');
+          }
+
+          renderer.setAnimationLoop(() => {
+            renderer.render(scene, camera);
+          });
+        }
       } catch (error) {
         console.error("Error starting AR session:", error);
         alert(`AR Error: ${error.message}`);
@@ -149,7 +95,6 @@
 
     document.getElementById('enter-ar').addEventListener('click', async () => {
       await startAR();
-      await initWaypoints();
       document.getElementById('enter-ar').style.display = 'none';
     });
 
