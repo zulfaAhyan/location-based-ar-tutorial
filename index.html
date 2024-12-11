@@ -138,7 +138,25 @@
           new THREE.ConeGeometry(0.2, 0.6, 8),
           new THREE.MeshStandardMaterial({ color: 0x00ff00 })
         );
-       
+
+
+
+         // Calculate FOV-based scale (assuming you have access to FOV information)
+        const fovRadians = THREE.MathUtils.degToRad(camera.fov);
+        const sceneWidth = window.innerWidth;
+        const fovScale = sceneWidth / (2 * Math.tan(fovRadians / 2));
+      
+        // Adjust for AR visibility (optional)
+        const visibilityScale = 1.2; // Adjust as needed
+      
+        // Combine scales
+        const finalScale = fovScale * visibilityScale;
+      
+        // Apply scale to position
+        position.x *= finalScale;
+        position.z *= finalScale;
+        
+        
         arrow.position.set(midpoint.x, 1.5, midpoint.z);
         arrow.lookAt(end);
         arrow.rotateX(Math.PI / 2);
