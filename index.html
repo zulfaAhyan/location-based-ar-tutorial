@@ -73,46 +73,35 @@
     // Enhanced waypoint marker creation with distance labels
     function createWaypointMarker(position, color, index, distance) {
       const group = new THREE.Group();
-    
-      // Calculate FOV-based scaling
-      const fovRadians = THREE.MathUtils.degToRad(camera.fov);
-      const distanceFromCamera = camera.position.distanceTo(new THREE.Vector3(position.x, 0, position.z));
-      
-      // Calculate visible height at the marker's distance
-      const visibleHeight = 2 * Math.tan(fovRadians / 2) * distanceFromCamera;
-      
-      // Base scale on visible height and desired marker size (e.g. want marker to occupy ~10% of view)
-      const targetSize = 0.1; // 10% of view height
-      const scale = (visibleHeight * targetSize) / 2; // Divide by 2 as marker is 2 units tall
-      
-      // Create marker geometry with dynamic scaling
-      const geometry = new THREE.CylinderGeometry(0.5 * scale, 0.5 * scale, 2 * scale, 32);
+
+      // Larger marker for better visibility
+      const geometry = new THREE.CylinderGeometry(0.5, 0.5, 2, 32);
       const material = new THREE.MeshStandardMaterial({ color });
       const marker = new THREE.Mesh(geometry, material);
-      marker.position.set(0, scale, 0); // Raise marker proportionally
+      marker.position.set(0, 1, 0); // Raise marker above ground
       group.add(marker);
-    
-      // Scale beacon proportionally
-      const beaconGeometry = new THREE.SphereGeometry(0.3 * scale, 32, 32);
+
+      // Add floating beacon light
+      const beaconGeometry = new THREE.SphereGeometry(0.3, 32, 32);
       const beaconMaterial = new THREE.MeshStandardMaterial({
         color: 'white',
         emissive: color,
         emissiveIntensity: 0.5
       });
       const beacon = new THREE.Mesh(beaconGeometry, beaconMaterial);
-      beacon.position.set(0, 2.5 * scale, 0);
+      beacon.position.set(0, 2.5, 0);
       group.add(beacon);
-    
-      // Adjust animation amplitude based on scale
+
+      // Animate beacon
       const animate = () => {
-        beacon.position.y = (2.5 * scale) + Math.sin(Date.now() * 0.003) * (0.2 * scale);
+        beacon.position.y = 2.5 + Math.sin(Date.now() * 0.003) * 0.2;
         requestAnimationFrame(animate);
       };
       animate();
-    
-      // Position the entire group with original coordinates
+
+      // Position the entire group
       group.position.set(position.x, 0, position.z);
-      
+      scene.add(group);
       return group;
     }
 
@@ -149,25 +138,7 @@
           new THREE.ConeGeometry(0.2, 0.6, 8),
           new THREE.MeshStandardMaterial({ color: 0x00ff00 })
         );
-
-
-
-         // Calculate FOV-based scale (assuming you have access to FOV information)
-        const fovRadians = THREE.MathUtils.degToRad(camera.fov);
-        const sceneWidth = window.innerWidth;
-        const fovScale = sceneWidth / (2 * Math.tan(fovRadians / 2));
-      
-        // Adjust for AR visibility (optional)
-        const visibilityScale = 1.2; // Adjust as needed
-      
-        // Combine scales
-        const finalScale = fovScale * visibilityScale;
-      
-        // Apply scale to position
-        position.x *= finalScale;
-        position.z *= finalScale;
-        
-        
+       
         arrow.position.set(midpoint.x, 1.5, midpoint.z);
         arrow.lookAt(end);
         arrow.rotateX(Math.PI / 2);
