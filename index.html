@@ -187,41 +187,35 @@
 
     async function initWaypoints() {
       const waypoints = await loadWaypoints();
-      if (waypoints.length === 0) {
-        console.warn("No waypoints found.");
-        return;
+      if (waypoints.length === 0) return;
+    
+      // Calculate total path length
+      let totalPathDistance = 0;
+      for (let i = 0; i < waypoints.length - 1; i++) {
+        const pos = calculateRelativePosition(
+          waypoints[i].lat, waypoints[i].lng,
+          waypoints[i + 1].lat, waypoints[i].lng
+        );
+        totalPathDistance += pos.distance;
       }
+    
+      // Set AR comfortable viewing parameters
+      const minARDistance = 3;  // closest comfortable viewing (meters)
+      const maxARDistance = 30; // furthest practical viewing (meters)
+      const scale = maxARDistance / Math.max(totalPathDistance, maxARDistance);
+    
+      // Add a minimum scale to prevent tiny values for very long routes
+      const minScale = 0.1; // ensures objects don't get too small
+      const finalScale = Math.max(scale, minScale);
+    
+      console.log(`Path distance: ${totalPathDistance}m, AR scale: ${finalScale}`);
 
-      const positions = [];
-      const colors = ["red", "blue", "green", "yellow", "purple", "orange"];
-      let firstWaypoint = null;
-      let totalDistance = 0;
-     
-      waypoints.forEach((wp, index) => {
-        if (wp.lat && wp.lng) {
-          if (!firstWaypoint) {
-            firstWaypoint = wp;
-            positions.push({ x: 0, z: 0, distance: 0 });
-          } else {
-            const pos = calculateRelativePosition(
-              firstWaypoint.lat, firstWaypoint.lng,
-              wp.lat, wp.lng
-            );
-            totalDistance += pos.distance;
-            positions.push(pos);
-          }
-        }
-      });
 
-      // Use real-world scale with minor adjustment for AR visibility
-      // const scale = 0.01; // 1 unit = 2 meters
-      const scale = 0.2;
-      const markerPoints = [];
      
       positions.forEach((pos, index) => {
         const scaledPos = {
-          x: pos.x * scale,
-          z: pos.z * scale
+          x: pos.x * finalScale,
+          z: pos.z * finalScale
         };
         const marker = createWaypointMarker(
           scaledPos,
