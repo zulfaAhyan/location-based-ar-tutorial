@@ -54,32 +54,20 @@
       const R = 6371000; // Earth's radius in meters
       const φ1 = lat1 * Math.PI / 180;
       const φ2 = lat2 * Math.PI / 180;
-      const λ1 = lon1 * Math.PI / 180;
-      const λ2 = lon2 * Math.PI / 180;
-  
-      // Calculate differences
-      const Δφ = φ2 - φ1;
-      const Δλ = λ2 - λ1;
-  
-      // Calculate distance
+      const Δφ = (lat2 - lat1) * Math.PI / 180;
+      const Δλ = (lon2 - lon1) * Math.PI / 180;
+
       const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
                 Math.cos(φ1) * Math.cos(φ2) *
                 Math.sin(Δλ/2) * Math.sin(Δλ/2);
       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
       const d = R * c;
-  
-      // More accurate x,z calculation using bearing
-      const y = Math.sin(Δλ) * Math.cos(φ2);
-      const x = Math.cos(φ1) * Math.sin(φ2) -
-                Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
-      const bearing = Math.atan2(y, x);
-  
-      // Convert distance and bearing to x,z coordinates
-      return {
-          x: d * Math.sin(bearing),
-          z: d * Math.cos(bearing),
-          distance: d
-      };
+
+      // Calculate x (East-West) and z (North-South) components
+      const z = Math.sin(Δφ) * R;
+      const x = Math.cos(φ1) * Math.sin(Δλ) * R;
+
+      return { x, z, distance: d };
     }
 
     // Enhanced waypoint marker creation with distance labels
@@ -187,35 +175,16 @@
 
     async function initWaypoints() {
       const waypoints = await loadWaypoints();
-      if (waypoints.length === 0) return;
-    
-      // Calculate total path length
-      let totalPathDistance = 0;
-      for (let i = 0; i < waypoints.length - 1; i++) {
-        const pos = calculateRelativePosition(
-          waypoints[i].lat, waypoints[i].lng,
-          waypoints[i + 1].lat, waypoints[i].lng
-        );
-        totalPathDistance += pos.distance;
+      if (waypoints.length === 0) {
+        console.warn("No waypoints found.");
+        return;
       }
-    
-      // Set AR comfortable viewing parameters
-      const minARDistance = 3;  // closest comfortable viewing (meters)
-      const maxARDistance = 30; // furthest practical viewing (meters)
-      const scale = maxARDistance / Math.max(totalPathDistance, maxARDistance);
-    
-      // Add a minimum scale to prevent tiny values for very long routes
-      const minScale = 0.1; // ensures objects don't get too small
-      const finalScale = Math.max(scale, minScale);
-    
-      console.log(`Path distance: ${totalPathDistance}m, AR scale: ${finalScale}`);
-    
-      // Calculate positions relative to first waypoint
+
       const positions = [];
-      const markerPoints = [];
       const colors = ["red", "blue", "green", "yellow", "purple", "orange"];
       let firstWaypoint = null;
-    
+      let totalDistance = 0;
+     
       waypoints.forEach((wp, index) => {
         if (wp.lat && wp.lng) {
           if (!firstWaypoint) {
@@ -226,16 +195,20 @@
               firstWaypoint.lat, firstWaypoint.lng,
               wp.lat, wp.lng
             );
+            totalDistance += pos.distance;
             positions.push(pos);
           }
         }
       });
-    
-      // Create markers and path with the calculated scale
+
+      // Use real-world scale with minor adjustment for AR visibility
+      const scale = 0.5; // 1 unit = 2 meters
+      const markerPoints = [];
+     
       positions.forEach((pos, index) => {
         const scaledPos = {
-          x: pos.x * finalScale,
-          z: pos.z * finalScale
+          x: pos.x * scale,
+          z: pos.z * scale
         };
         const marker = createWaypointMarker(
           scaledPos,
@@ -245,7 +218,7 @@
         );
         markerPoints.push(scaledPos);
       });
-    
+
       createPathLine(markerPoints);
     }
 
