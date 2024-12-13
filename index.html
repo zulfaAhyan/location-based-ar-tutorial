@@ -54,20 +54,32 @@
       const R = 6371000; // Earth's radius in meters
       const φ1 = lat1 * Math.PI / 180;
       const φ2 = lat2 * Math.PI / 180;
-      const Δφ = (lat2 - lat1) * Math.PI / 180;
-      const Δλ = (lon2 - lon1) * Math.PI / 180;
-
+      const λ1 = lon1 * Math.PI / 180;
+      const λ2 = lon2 * Math.PI / 180;
+  
+      // Calculate differences
+      const Δφ = φ2 - φ1;
+      const Δλ = λ2 - λ1;
+  
+      // Calculate distance
       const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
                 Math.cos(φ1) * Math.cos(φ2) *
                 Math.sin(Δλ/2) * Math.sin(Δλ/2);
       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
       const d = R * c;
-
-      // Calculate x (East-West) and z (North-South) components
-      const z = Math.sin(Δφ) * R;
-      const x = Math.cos(φ1) * Math.sin(Δλ) * R;
-
-      return { x, z, distance: d };
+  
+      // More accurate x,z calculation using bearing
+      const y = Math.sin(Δλ) * Math.cos(φ2);
+      const x = Math.cos(φ1) * Math.sin(φ2) -
+                Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+      const bearing = Math.atan2(y, x);
+  
+      // Convert distance and bearing to x,z coordinates
+      return {
+          x: d * Math.sin(bearing),
+          z: d * Math.cos(bearing),
+          distance: d
+      };
     }
 
     // Enhanced waypoint marker creation with distance labels
@@ -202,7 +214,7 @@
       });
 
       // Use real-world scale with minor adjustment for AR visibility
-      const scale = 0.5; // 1 unit = 2 meters
+      const scale = 0.01; // 1 unit = 2 meters
       const markerPoints = [];
      
       positions.forEach((pos, index) => {
