@@ -209,9 +209,29 @@
       const finalScale = Math.max(scale, minScale);
     
       console.log(`Path distance: ${totalPathDistance}m, AR scale: ${finalScale}`);
-
-
-     
+    
+      // Calculate positions relative to first waypoint
+      const positions = [];
+      const markerPoints = [];
+      const colors = ["red", "blue", "green", "yellow", "purple", "orange"];
+      let firstWaypoint = null;
+    
+      waypoints.forEach((wp, index) => {
+        if (wp.lat && wp.lng) {
+          if (!firstWaypoint) {
+            firstWaypoint = wp;
+            positions.push({ x: 0, z: 0, distance: 0 });
+          } else {
+            const pos = calculateRelativePosition(
+              firstWaypoint.lat, firstWaypoint.lng,
+              wp.lat, wp.lng
+            );
+            positions.push(pos);
+          }
+        }
+      });
+    
+      // Create markers and path with the calculated scale
       positions.forEach((pos, index) => {
         const scaledPos = {
           x: pos.x * finalScale,
@@ -225,7 +245,7 @@
         );
         markerPoints.push(scaledPos);
       });
-
+    
       createPathLine(markerPoints);
     }
 
