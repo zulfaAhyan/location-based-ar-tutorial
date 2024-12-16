@@ -48,6 +48,21 @@
             padding: 20px;
             border-radius: 5px;
             display: none;
+            text-align: center;
+        }
+        #fallback-mode {
+            display: none;
+            position: fixed;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 10px 20px;
+            background: #FFA500;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 14px;
+            cursor: pointer;
         }
     </style>
 </head>
@@ -57,6 +72,7 @@
         Loading...
     </div>
     <button id="start-button">Start AR Navigation</button>
+    <button id="fallback-mode">Use Non-AR Mode</button>
     <div id="error-message"></div>
 
     <script async src="https://unpkg.com/es-module-shims@1.7.3/dist/es-module-shims.js"></script>
@@ -84,22 +100,130 @@
         let waypoints = [];
         let waypointMarkers = [];
         
-        // Get routeId from URL parameters
         const urlParams = new URLSearchParams(window.location.search);
         const routeId = urlParams.get('routeId');
+
+        // Check AR capabilities
+        async function checkARSupport() {
+            if (!navigator.xr) {
+                throw new Error('WebXR not supported in this browser');
+            }
+
+            const features = ['local'];
+            const optionalFeatures = ['camera-access', 'geolocation', 'dom-overlay'];
+            
+            try {
+                const supported = await navigator.xr.isSessionSupported('immersive-ar');
+                if (!supported) {
+                    throw new Error('AR not supported on this device');
+                }
+
+                // Check each feature individually
+                const supportedFeatures = [];
+                for (const feature of features) {
+                    try {
+                        const session = await navigator.xr.requestSession('immersive-ar', {
+                            requiredFeatures: [feature]
+                        });
+                        supportedFeatures.push(feature);
+                        await session.end();
+                    } catch (e) {
+                        console.warn(`Feature ${feature} not supported:`, e);
+                    }
+                }
+
+                return {
+                    supported: true,
+                    features: supportedFeatures,
+                    optionalFeatures: optionalFeatures
+                };
+            } catch (error) {
+                throw new Error(`AR support check failed: ${error.message}`);
+            }
+        }
 
         // Initialize scene
         function initScene() {
             scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
             
-            // Add ambient light
             const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
             scene.add(ambientLight);
             
-            // Add directional light
             const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
             directionalLight.position.set(0, 5, 5);
             scene.add(directionalLight);
+        }
+
+        // Initialize AR session with progressive enhancement
+        async function initAR() {
+            try {
+                const arSupport = await checkARSupport();
+                
+                // Configure session with supported features
+                const sessionInit = {
+                    requiredFeatures: arSupport.features,
+                    optionalFeatures: arSupport.optionalFeatures
+                };
+
+                if (arSupport.optionalFeatures.includes('dom-overlay')) {
+                    sessionInit.domOverlay = { root: document.body };
+                }
+
+                session = await navigator.xr.requestSession('immersive-ar', sessionInit);
+
+                // Set up GL context
+                const canvas = document.querySelector('#ar-canvas');
+                gl = canvas.getContext('webgl2', { xrCompatible: true });
+                
+                if (!gl) {
+                    gl = canvas.getContext('webgl', { xrCompatible: true });
+                }
+                
+                if (!gl) {
+                    throw new Error('WebGL not supported');
+                }
+
+                // Initialize renderer
+                renderer = new THREE.WebGLRenderer({
+                    canvas: canvas,
+                    context: gl,
+                    alpha: true,
+                    antialias: true
+                });
+                
+                renderer.setPixelRatio(window.devicePixelRatio);
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                renderer.xr.enabled = true;
+
+                initScene();
+
+                // Set up reference spaces with fallbacks
+                try {
+                    localReferenceSpace = await session.requestReferenceSpace('local');
+                } catch (e) {
+                    console.warn('Local reference space not supported, falling back to viewer');
+                    localReferenceSpace = await session.requestReferenceSpace('viewer');
+                }
+
+                viewerSpace = await session.requestReferenceSpace('viewer');
+
+                session.updateRenderState({
+                    baseLayer: new XRWebGLLayer(session, gl)
+                });
+
+                await startLocationTracking();
+                await loadWaypoints();
+
+                session.requestAnimationFrame(onXRFrame);
+                
+                showMessage('AR Navigation Started');
+                
+            } catch (error) {
+                console.error('AR initialization failed:', error);
+                showError(`AR initialization failed: ${error.message}\nTrying fallback mode...`);
+                document.getElementById('fallback-mode').style.display = 'block';
+            }
         }
 
         // Create waypoint marker
@@ -308,8 +432,9 @@
             renderer.render(scene, camera);
         }
 
-        // Initialize on load
+        // Initialize
         document.getElementById('start-button').addEventListener('click', initAR);
+        document.getElementById('fallback-mode').addEventListener('click', initFallbackMode);
     </script>
 </body>
 </html>
