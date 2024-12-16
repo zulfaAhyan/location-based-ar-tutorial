@@ -246,11 +246,41 @@
                 throw new Error('Failed to load waypoints: ' + error.message);
             }
         }
+
+
+        // Add these functions for session management
+        async function endCurrentSession() {
+            if (session) {
+                await session.end();
+                session = null;
+            }
+            // Clean up Three.js resources
+            if (renderer) {
+                renderer.dispose();
+                renderer = null;
+            }
+            if (scene) {
+                // Remove all objects from the scene
+                while (scene.children.length > 0) {
+                    scene.remove(scene.children[0]);
+                }
+                scene = null;
+            }
+            // Reset other variables
+            localReferenceSpace = null;
+            viewerSpace = null;
+            gl = null;
+            camera = null;
+            waypointMarkers = [];
+        }
         
-        // Function to initialize the AR experience
+        // Modify the startAR function
         async function startAR() {
             try {
                 showMessage('Initializing AR...');
+                
+                // End any existing session first
+                await endCurrentSession();
                 
                 // First, get the current location
                 currentLocation = await new Promise((resolve, reject) => {
@@ -288,6 +318,12 @@
         
                 // Request the AR session
                 session = await navigator.xr.requestSession('immersive-ar', sessionInit);
+                
+                // Add session end event handler
+                session.addEventListener('end', () => {
+                    console.log('AR session ended');
+                    endCurrentSession();
+                });
         
                 // Initialize WebGL context
                 const canvas = document.querySelector('#ar-canvas');
@@ -329,8 +365,11 @@
                 console.error('AR initialization failed:', error);
                 showError(`AR initialization failed: ${error.message}`);
                 document.getElementById('fallback-mode').style.display = 'block';
+                // Clean up any partially initialized session
+                await endCurrentSession();
             }
         }
+
 
         // Permission handling
         async function requestPermissions() {
@@ -378,6 +417,15 @@
         // Fallback mode
         function initFallbackMode() {
             showMessage('Switching to non-AR navigation mode...');
+
+            showMessage('Switching to non-AR navigation mode...');
+    
+            // Clean up existing AR session
+            await endCurrentSession();
+            
+            // Initialize a basic 2D map view
+            const canvas = document.querySelector('#ar-canvas');
+            const ctx = canvas.getContext('2d');
             
             // Clear existing AR setup if any
             if (session) {
