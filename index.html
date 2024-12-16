@@ -1,11 +1,35 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
+    <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>AR Navigation</title>
     <style>
-        /* Styles */
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+        #ar-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        .ui-overlay {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            z-index: 1000;
+            text-align: center;
+            display: none;
+        }
         .instruction-overlay {
             position: fixed;
             top: 50%;
@@ -31,33 +55,42 @@
             background: #cccccc;
             cursor: not-allowed;
         }
-        #info {
-            position: fixed;
-            bottom: 10px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.8);
-            color: white;
-            padding: 10px;
-            border-radius: 5px;
-            display: none;
-            z-index: 1000;
-        }
-        #error-message {
-            color: red;
-            font-size: 14px;
-            margin-top: 10px;
-        }
         #permission-screen {
             display: none;
+        }
+        #error-message {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 0, 0, 0.7);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            z-index: 1000;
+            display: none;
+        }
+        #start-button, #fallback-mode {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 10px 20px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            z-index: 1000;
         }
     </style>
 </head>
 <body>
     <canvas id="ar-canvas"></canvas>
-    <div id="info" class="ui-overlay"></div>
-    <div id="error-message"></div>
-
+    <div id="info" class="ui-overlay">
+        Welcome to AR Navigation
+    </div>
+    
     <div id="permission-screen" class="instruction-overlay">
         <h2>AR Navigation Setup</h2>
         <p>This app requires:</p>
@@ -70,6 +103,7 @@
 
     <button id="start-button" style="display: none;">Start AR Navigation</button>
     <button id="fallback-mode" style="display: none;">Use Non-AR Mode</button>
+    <div id="error-message"></div>
 
     <script async src="https://unpkg.com/es-module-shims@1.7.3/dist/es-module-shims.js"></script>
     <script type="importmap">
@@ -80,11 +114,12 @@
         }
     }
     </script>
+
     <script type="module">
         import * as THREE from 'three';
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-        // Variables
+        // Global variables
         let session = null;
         let localReferenceSpace = null;
         let viewerSpace = null;
@@ -99,25 +134,114 @@
         const urlParams = new URLSearchParams(window.location.search);
         const routeId = urlParams.get('routeId');
 
-        // Functions for showing messages
+        // Function to show status messages to the user
         function showMessage(message) {
-            const info = document.getElementById('info');
-            info.textContent = message;
-            info.style.display = 'block';
-            setTimeout(() => {
-                info.style.display = 'none';
-            }, 3000);
+            const infoElement = document.getElementById('info');
+            if (infoElement) {
+                infoElement.textContent = message;
+                infoElement.style.display = 'block';
+            }
         }
 
-        function showError(errorMessage) {
-            const errorDiv = document.getElementById('error-message');
-            errorDiv.textContent = errorMessage;
-            errorDiv.style.display = 'block';
+        // Function to show error messages to the user
+        function showError(message) {
+            const errorElement = document.getElementById('error-message');
+            if (errorElement) {
+                errorElement.textContent = message;
+                errorElement.style.display = 'block';
+                errorElement.style.color = 'red';
+            }
+            showMessage(message); // Also show in the info overlay
         }
 
-        function initFallbackMode() {
-            showMessage('Fallback mode activated. AR features are disabled.');
-            // Implement fallback logic (e.g., basic navigation without AR)
+        // Function to check if AR is supported
+        async function checkARSupport() {
+            if (!navigator.xr) {
+                throw new Error('WebXR not supported');
+            }
+            
+            try {
+                const supported = await navigator.xr.isSessionSupported('immersive-ar');
+                if (!supported) {
+                    throw new Error('AR not supported');
+                }
+                return supported;
+            } catch (error) {
+                throw new Error('Failed to check AR support: ' + error.message);
+            }
+        }
+
+        // Function to create waypoint markers
+        function createWaypointMarker() {
+            const geometry = new THREE.SphereGeometry(0.1, 32, 32);
+            const material = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+            return new THREE.Mesh(geometry, material);
+        }
+
+        // Function to update waypoint positions
+        function updateWaypointPositions() {
+            waypoints.forEach((waypoint, index) => {
+                if (!waypointMarkers[index]) {
+                    const marker = createWaypointMarker();
+                    waypointMarkers[index] = marker;
+                    scene.add(marker);
+                }
+
+                // Calculate relative position from current location to waypoint
+                const dx = waypoint.longitude - currentLocation.longitude;
+                const dy = waypoint.latitude - currentLocation.latitude;
+                
+                // Scale and position the marker
+                waypointMarkers[index].position.set(
+                    dx * 1000, // Scale factor for visualization
+                    0,
+                    dy * 1000
+                );
+            });
+        }
+
+        // Function to start location tracking
+        function startLocationTracking() {
+            return new Promise((resolve, reject) => {
+                if (!navigator.geolocation) {
+                    reject(new Error('Geolocation not supported'));
+                    return;
+                }
+
+                const options = {
+                    enableHighAccuracy: true,
+                    timeout: 5000,
+                    maximumAge: 0
+                };
+
+                navigator.geolocation.watchPosition(
+                    (position) => {
+                        currentLocation = {
+                            latitude: position.coords.latitude,
+                            longitude: position.coords.longitude
+                        };
+                        resolve(currentLocation);
+                    },
+                    (error) => {
+                        reject(error);
+                    },
+                    options
+                );
+            });
+        }
+
+        // Function to load waypoints
+        async function loadWaypoints() {
+            try {
+                // Simulated waypoints - replace with actual API call
+                waypoints = [
+                    { latitude: currentLocation.latitude + 0.001, longitude: currentLocation.longitude + 0.001 },
+                    { latitude: currentLocation.latitude + 0.002, longitude: currentLocation.longitude + 0.002 }
+                ];
+                return waypoints;
+            } catch (error) {
+                throw new Error('Failed to load waypoints: ' + error.message);
+            }
         }
 
         // Permission handling
@@ -148,79 +272,172 @@
             }
         }
 
-async function startAR() {
-    try {
-        showMessage('Initializing AR...');
-        
-        const sessionInit = {
-            requiredFeatures: ['local'],
-            optionalFeatures: ['camera-access', 'dom-overlay'],
-            domOverlay: { root: document.body }
-        };
-
-        session = await navigator.xr.requestSession('immersive-ar', sessionInit);
-
-        const canvas = document.querySelector('#ar-canvas');
-        gl = canvas.getContext('webgl2', { xrCompatible: true }) || 
-             canvas.getContext('webgl', { xrCompatible: true });
-
-        if (!gl) {
-            showError('WebGL not supported on this device.');
-            return;
+        // Initialize scene
+        function initScene() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            
+            // Add ambient light
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+            
+            // Add directional light
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(0, 10, 0);
+            scene.add(directionalLight);
         }
 
-        renderer = new THREE.WebGLRenderer({
-            canvas: canvas,
-            context: gl,
-            alpha: true,
-            antialias: true
-        });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.xr.enabled = true;
-
-        scene = new THREE.Scene();
-        camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 1000);
-        scene.add(camera);
-
-        // Add debugging visuals
-        const axesHelper = new THREE.AxesHelper(1);
-        scene.add(axesHelper);
-
-        localReferenceSpace = await session.requestReferenceSpace('local');
-
-        session.updateRenderState({
-            baseLayer: new XRWebGLLayer(session, gl)
-        });
-
-        // Fetch waypoints if routeId exists
-        if (routeId) {
-            await fetchWaypoints(routeId);
+        // Fallback mode
+        function initFallbackMode() {
+            showMessage('Switching to non-AR navigation mode...');
+            
+            // Clear existing AR setup if any
+            if (session) {
+                session.end();
+            }
+            
+            // Initialize a basic 2D map view
+            const canvas = document.querySelector('#ar-canvas');
+            const ctx = canvas.getContext('2d');
+            
+            // Set canvas size
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            
+            // Draw a simple 2D representation
+            function draw2DNavigation() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                // Draw current location
+                if (currentLocation) {
+                    ctx.fillStyle = 'blue';
+                    ctx.beginPath();
+                    ctx.arc(canvas.width/2, canvas.height/2, 10, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                
+                // Draw waypoints
+                waypoints.forEach((waypoint, index) => {
+                    ctx.fillStyle = 'red';
+                    ctx.beginPath();
+                    // Convert GPS coordinates to screen coordinates (simplified)
+                    const x = (waypoint.longitude - currentLocation.longitude) * 1000 + canvas.width/2;
+                    const y = (waypoint.latitude - currentLocation.latitude) * 1000 + canvas.height/2;
+                    ctx.arc(x, y, 5, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    // Draw waypoint number
+                    ctx.fillStyle = 'black';
+                    ctx.font = '12px Arial';
+                    ctx.fillText(index + 1, x + 10, y + 10);
+                });
+                
+                requestAnimationFrame(draw2DNavigation);
+            }
+            
+            // Start the 2D navigation loop
+            draw2DNavigation();
+            
+            // Hide AR-specific UI elements
+            document.getElementById('permission-screen').style.display = 'none';
+            document.getElementById('start-button').style.display = 'none';
+            document.getElementById('fallback-mode').style.display = 'none';
         }
 
-        session.requestAnimationFrame(onXRFrame);
-        showMessage('AR Navigation Started');
-    } catch (error) {
-        console.error('AR initialization failed:', error);
-        showError(`AR initialization failed: ${error.message}`);
-        document.getElementById('fallback-mode').style.display = 'block';
-    }
-}
+        // Start AR function
+        async function startAR() {
+            try {
+                showMessage('Initializing AR...');
+                const arSupport = await checkARSupport();
+                
+                // Configure session with supported features
+                const sessionInit = {
+                    requiredFeatures: ['local'],
+                    optionalFeatures: ['camera-access', 'dom-overlay'],
+                    domOverlay: { root: document.body }
+                };
 
+                // Request the AR session
+                session = await navigator.xr.requestSession('immersive-ar', sessionInit);
 
-        // Frame rendering
-        function onXRFrame(time, frame) {
-            session.requestAnimationFrame(onXRFrame);
+                // Initialize WebGL context
+                const canvas = document.querySelector('#ar-canvas');
+                gl = canvas.getContext('webgl2', { xrCompatible: true }) ||
+                     canvas.getContext('webgl', { xrCompatible: true });
 
-            const pose = frame.getViewerPose(localReferenceSpace);
-            if (pose) {
-                renderer.render(scene, camera);
+                if (!gl) {
+                    throw new Error('WebGL not supported');
+                }
+
+                // Set up renderer
+                renderer = new THREE.WebGLRenderer({
+                    canvas: canvas,
+                    context: gl,
+                    alpha: true,
+                    antialias: true
+                });
+                
+                renderer.setPixelRatio(window.devicePixelRatio);
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                renderer.xr.enabled = true;
+
+                initScene();
+
+                // Set up reference spaces
+                localReferenceSpace = await session.requestReferenceSpace('local');
+                viewerSpace = await session.requestReferenceSpace('viewer');
+
+                session.updateRenderState({
+                    baseLayer: new XRWebGLLayer(session, gl)
+                });
+
+                // Start the XR animation loop
+                session.requestAnimationFrame(onXRFrame);
+                
+                // Load waypoints and start tracking
+                await Promise.all([
+                    loadWaypoints(),
+                    startLocationTracking()
+                ]);
+
+                showMessage('AR Navigation Started');
+                
+            } catch (error) {
+                console.error('AR initialization failed:', error);
+                showError(`AR initialization failed: ${error.message}`);
+                document.getElementById('fallback-mode').style.display = 'block';
             }
         }
 
-        // Event Listeners
+        // Animation frame callback
+        function onXRFrame(time, frame) {
+            if (!session) return;
+            
+            session.requestAnimationFrame(onXRFrame);
+            
+            const pose = frame.getViewerPose(localReferenceSpace);
+            if (!pose) return;
+            
+            const layer = session.renderState.baseLayer;
+            renderer.setSize(layer.framebufferWidth, layer.framebufferHeight);
+            
+            camera.matrix.fromArray(pose.transform.matrix);
+            camera.projectionMatrix.fromArray(pose.views[0].projectionMatrix);
+            
+            // Update waypoint positions based on current location
+            if (currentLocation && waypoints.length > 0) {
+                updateWaypointPositions();
+            }
+            
+            renderer.render(scene, camera);
+        }
+
+        // Initialize
         document.addEventListener('DOMContentLoaded', () => {
+            // Show permission screen first
             document.getElementById('permission-screen').style.display = 'block';
             
+            // Set up event listeners
             document.getElementById('permission-button').addEventListener('click', async (event) => {
                 event.target.disabled = true;
                 await requestPermissions();
