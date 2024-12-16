@@ -148,62 +148,64 @@
             }
         }
 
-        // Start AR
-        async function startAR() {
-            try {
-                showMessage('Initializing AR...');
-                
-                const sessionInit = {
-                    requiredFeatures: ['local'],
-                    optionalFeatures: ['camera-access', 'dom-overlay'],
-                    domOverlay: { root: document.body }
-                };
+async function startAR() {
+    try {
+        showMessage('Initializing AR...');
+        
+        const sessionInit = {
+            requiredFeatures: ['local'],
+            optionalFeatures: ['camera-access', 'dom-overlay'],
+            domOverlay: { root: document.body }
+        };
 
-                session = await navigator.xr.requestSession('immersive-ar', sessionInit);
+        session = await navigator.xr.requestSession('immersive-ar', sessionInit);
 
-                // Initialize WebGL context
-                const canvas = document.querySelector('#ar-canvas');
-                gl = canvas.getContext('webgl2', { xrCompatible: true }) ||
-                     canvas.getContext('webgl', { xrCompatible: true });
+        const canvas = document.querySelector('#ar-canvas');
+        gl = canvas.getContext('webgl2', { xrCompatible: true }) || 
+             canvas.getContext('webgl', { xrCompatible: true });
 
-                if (!gl) {
-                    throw new Error('WebGL not supported');
-                }
-
-                renderer = new THREE.WebGLRenderer({
-                    canvas: canvas,
-                    context: gl,
-                    alpha: true,
-                    antialias: true
-                });
-                
-                renderer.setPixelRatio(window.devicePixelRatio);
-                renderer.setSize(window.innerWidth, window.innerHeight);
-                renderer.xr.enabled = true;
-
-                // Initialize scene
-                scene = new THREE.Scene();
-                camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 1000);
-                scene.add(camera);
-
-                // Request reference spaces
-                localReferenceSpace = await session.requestReferenceSpace('local');
-                viewerSpace = await session.requestReferenceSpace('viewer');
-
-                session.updateRenderState({
-                    baseLayer: new XRWebGLLayer(session, gl)
-                });
-
-                session.requestAnimationFrame(onXRFrame);
-
-                // Placeholder for loading waypoints or starting location tracking
-                showMessage('AR Navigation Started');
-            } catch (error) {
-                console.error('AR initialization failed:', error);
-                showError(`AR initialization failed: ${error.message}`);
-                document.getElementById('fallback-mode').style.display = 'block';
-            }
+        if (!gl) {
+            showError('WebGL not supported on this device.');
+            return;
         }
+
+        renderer = new THREE.WebGLRenderer({
+            canvas: canvas,
+            context: gl,
+            alpha: true,
+            antialias: true
+        });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.xr.enabled = true;
+
+        scene = new THREE.Scene();
+        camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 1000);
+        scene.add(camera);
+
+        // Add debugging visuals
+        const axesHelper = new THREE.AxesHelper(1);
+        scene.add(axesHelper);
+
+        localReferenceSpace = await session.requestReferenceSpace('local');
+
+        session.updateRenderState({
+            baseLayer: new XRWebGLLayer(session, gl)
+        });
+
+        // Fetch waypoints if routeId exists
+        if (routeId) {
+            await fetchWaypoints(routeId);
+        }
+
+        session.requestAnimationFrame(onXRFrame);
+        showMessage('AR Navigation Started');
+    } catch (error) {
+        console.error('AR initialization failed:', error);
+        showError(`AR initialization failed: ${error.message}`);
+        document.getElementById('fallback-mode').style.display = 'block';
+    }
+}
+
 
         // Frame rendering
         function onXRFrame(time, frame) {
