@@ -482,12 +482,12 @@
 
         
         // Animation frame callback
-        function onXRFrame(time, frame) {
+        function onXRFrame(time, xrFrame) {
             if (!session) return;
             
             session.requestAnimationFrame(onXRFrame);
             
-            const pose = frame.getViewerPose(localReferenceSpace);
+            const pose = xrFrame.getViewerPose(localReferenceSpace);
             if (!pose) return;
             
             const layer = session.renderState.baseLayer;
