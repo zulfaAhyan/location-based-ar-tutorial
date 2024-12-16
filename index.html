@@ -230,19 +230,32 @@
             });
         }
 
-        // Function to load waypoints
+  // Function to load waypoints
         async function loadWaypoints() {
+            if (!currentLocation) {
+                throw new Error('Current location not available');
+            }
+
             try {
-                // Simulated waypoints - replace with actual API call
-                waypoints = [
-                    { latitude: currentLocation.latitude + 0.001, longitude: currentLocation.longitude + 0.001 },
-                    { latitude: currentLocation.latitude + 0.002, longitude: currentLocation.longitude + 0.002 }
+                // For testing purposes, create waypoints relative to current location
+                // In production, this would be replaced with an API call using routeId
+                return [
+                    { 
+                        latitude: currentLocation.latitude + 0.001, 
+                        longitude: currentLocation.longitude + 0.001,
+                        label: 'Waypoint 1'
+                    },
+                    { 
+                        latitude: currentLocation.latitude + 0.002, 
+                        longitude: currentLocation.longitude + 0.002,
+                        label: 'Waypoint 2'
+                    }
                 ];
-                return waypoints;
             } catch (error) {
                 throw new Error('Failed to load waypoints: ' + error.message);
             }
         }
+
 
         // Permission handling
         async function requestPermissions() {
@@ -344,11 +357,25 @@
             document.getElementById('fallback-mode').style.display = 'none';
         }
 
-        // Start AR function
+
+
+        // Modified startAR function with proper sequencing
         async function startAR() {
             try {
                 showMessage('Initializing AR...');
                 const arSupport = await checkARSupport();
+                
+                // Start location tracking first
+                showMessage('Getting current location...');
+                await startLocationTracking();
+                
+                if (!currentLocation) {
+                    throw new Error('Failed to get current location');
+                }
+
+                // Load waypoints after we have location
+                showMessage('Loading waypoints...');
+                waypoints = await loadWaypoints();
                 
                 // Configure session with supported features
                 const sessionInit = {
@@ -393,12 +420,6 @@
 
                 // Start the XR animation loop
                 session.requestAnimationFrame(onXRFrame);
-                
-                // Load waypoints and start tracking
-                await Promise.all([
-                    loadWaypoints(),
-                    startLocationTracking()
-                ]);
 
                 showMessage('AR Navigation Started');
                 
@@ -409,6 +430,45 @@
             }
         }
 
+// Modified startLocationTracking function with better error handling
+        function startLocationTracking() {
+            return new Promise((resolve, reject) => {
+                if (!navigator.geolocation) {
+                    reject(new Error('Geolocation not supported'));
+                    return;
+                }
+
+                const options = {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0
+                };
+
+                const watchId = navigator.geolocation.watchPosition(
+                    (position) => {
+                        currentLocation = {
+                            latitude: position.coords.latitude,
+                            longitude: position.coords.longitude,
+                            accuracy: position.coords.accuracy
+                        };
+                        resolve(currentLocation);
+                    },
+                    (error) => {
+                        reject(new Error(`Location error: ${error.message}`));
+                    },
+                    options
+                );
+
+                // Add a timeout for the initial position
+                setTimeout(() => {
+                    if (!currentLocation) {
+                        reject(new Error('Location timeout - please check your GPS settings'));
+                    }
+                }, options.timeout);
+            });
+        }
+        
+        
         // Animation frame callback
         function onXRFrame(time, frame) {
             if (!session) return;
