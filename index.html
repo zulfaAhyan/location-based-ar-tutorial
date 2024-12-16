@@ -231,8 +231,11 @@
         }
 
         // Function to load waypoints
-        async function loadWaypoints() {
+        async function loadWaypoints(currentLocation) {
             try {
+                if (!currentLocation) {
+                    throw new Error('Current location not available');
+                }
                 // Simulated waypoints - replace with actual API call
                 waypoints = [
                     { latitude: currentLocation.latitude + 0.001, longitude: currentLocation.longitude + 0.001 },
@@ -241,6 +244,91 @@
                 return waypoints;
             } catch (error) {
                 throw new Error('Failed to load waypoints: ' + error.message);
+            }
+        }
+        
+        // Function to initialize the AR experience
+        async function startAR() {
+            try {
+                showMessage('Initializing AR...');
+                
+                // First, get the current location
+                currentLocation = await new Promise((resolve, reject) => {
+                    navigator.geolocation.getCurrentPosition(
+                        (position) => {
+                            resolve({
+                                latitude: position.coords.latitude,
+                                longitude: position.coords.longitude
+                            });
+                        },
+                        reject,
+                        {
+                            enableHighAccuracy: true,
+                            timeout: 5000,
+                            maximumAge: 0
+                        }
+                    );
+                });
+        
+                // Then check AR support
+                const arSupport = await checkARSupport();
+                
+                // Load waypoints after we have the current location
+                await loadWaypoints(currentLocation);
+                
+                // Start continuous location tracking
+                startLocationTracking();
+                
+                // Configure session with supported features
+                const sessionInit = {
+                    requiredFeatures: ['local'],
+                    optionalFeatures: ['camera-access', 'dom-overlay'],
+                    domOverlay: { root: document.body }
+                };
+        
+                // Request the AR session
+                session = await navigator.xr.requestSession('immersive-ar', sessionInit);
+        
+                // Initialize WebGL context
+                const canvas = document.querySelector('#ar-canvas');
+                gl = canvas.getContext('webgl2', { xrCompatible: true }) ||
+                     canvas.getContext('webgl', { xrCompatible: true });
+        
+                if (!gl) {
+                    throw new Error('WebGL not supported');
+                }
+        
+                // Set up renderer
+                renderer = new THREE.WebGLRenderer({
+                    canvas: canvas,
+                    context: gl,
+                    alpha: true,
+                    antialias: true
+                });
+                
+                renderer.setPixelRatio(window.devicePixelRatio);
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                renderer.xr.enabled = true;
+        
+                initScene();
+        
+                // Set up reference spaces
+                localReferenceSpace = await session.requestReferenceSpace('local');
+                viewerSpace = await session.requestReferenceSpace('viewer');
+        
+                session.updateRenderState({
+                    baseLayer: new XRWebGLLayer(session, gl)
+                });
+        
+                // Start the XR animation loop
+                session.requestAnimationFrame(onXRFrame);
+                
+                showMessage('AR Navigation Started');
+                
+            } catch (error) {
+                console.error('AR initialization failed:', error);
+                showError(`AR initialization failed: ${error.message}`);
+                document.getElementById('fallback-mode').style.display = 'block';
             }
         }
 
@@ -344,71 +432,7 @@
             document.getElementById('fallback-mode').style.display = 'none';
         }
 
-        // Start AR function
-        async function startAR() {
-            try {
-                showMessage('Initializing AR...');
-                const arSupport = await checkARSupport();
-                
-                // Configure session with supported features
-                const sessionInit = {
-                    requiredFeatures: ['local'],
-                    optionalFeatures: ['camera-access', 'dom-overlay'],
-                    domOverlay: { root: document.body }
-                };
-
-                // Request the AR session
-                session = await navigator.xr.requestSession('immersive-ar', sessionInit);
-
-                // Initialize WebGL context
-                const canvas = document.querySelector('#ar-canvas');
-                gl = canvas.getContext('webgl2', { xrCompatible: true }) ||
-                     canvas.getContext('webgl', { xrCompatible: true });
-
-                if (!gl) {
-                    throw new Error('WebGL not supported');
-                }
-
-                // Set up renderer
-                renderer = new THREE.WebGLRenderer({
-                    canvas: canvas,
-                    context: gl,
-                    alpha: true,
-                    antialias: true
-                });
-                
-                renderer.setPixelRatio(window.devicePixelRatio);
-                renderer.setSize(window.innerWidth, window.innerHeight);
-                renderer.xr.enabled = true;
-
-                initScene();
-
-                // Set up reference spaces
-                localReferenceSpace = await session.requestReferenceSpace('local');
-                viewerSpace = await session.requestReferenceSpace('viewer');
-
-                session.updateRenderState({
-                    baseLayer: new XRWebGLLayer(session, gl)
-                });
-
-                // Start the XR animation loop
-                session.requestAnimationFrame(onXRFrame);
-                
-                // Load waypoints and start tracking
-                await Promise.all([
-                    loadWaypoints(),
-                    startLocationTracking()
-                ]);
-
-                showMessage('AR Navigation Started');
-                
-            } catch (error) {
-                console.error('AR initialization failed:', error);
-                showError(`AR initialization failed: ${error.message}`);
-                document.getElementById('fallback-mode').style.display = 'block';
-            }
-        }
-
+        
         // Animation frame callback
         function onXRFrame(time, frame) {
             if (!session) return;
