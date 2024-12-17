@@ -65,6 +65,7 @@
         let waypointMarkers = [];
         let currentLocation = null;
         // let routeId = "12345"; // Example route ID
+        let routeId = new URLSearchParams(window.location.search).get('routeId');
         let scene, renderer, camera;
 
         // Initialize WebXR AR session
