@@ -54,24 +54,29 @@
       renderer.setAnimationLoop(render);
     }
 
-    // Fetch waypoints from server
     async function loadWaypoints() {
       const routeId = new URLSearchParams(window.location.search).get('routeId');
       if (!routeId) {
         console.error("Route ID not provided");
         return [];
       }
-
       try {
         const response = await fetch(`https://waypoints-prht.onrender.com/get-waypoints/${routeId}`);
         const data = await response.json();
-        console.log("Loaded waypoints:", data);
-        return data;
+        console.log("Full Data Response:", data); // Check the full structure of the response
+        if (data.waypoints) {
+          console.log("Loaded waypoints:", data.waypoints);
+          return data.waypoints; // Return the waypoints array
+        } else {
+          console.warn("No waypoints found in the response.");
+          return [];
+        }
       } catch (error) {
         console.error("Error fetching waypoints:", error);
         return [];
       }
     }
+
 
     // Calculate relative position
     function calculateRelativePosition(lat1, lon1, lat2, lon2) {
