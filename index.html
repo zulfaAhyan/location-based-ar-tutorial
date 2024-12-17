@@ -64,6 +64,7 @@
         let waypoints = [];
         let waypointMarkers = [];
         let currentLocation = null;
+        const routeId = new URLSearchParams(window.location.search).get('routeId');
         // let routeId = "12345"; // Example route ID
         let scene, renderer, camera;
 
