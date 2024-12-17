@@ -91,10 +91,15 @@
             }
         }
 
+
         // Fetch waypoints from the server
         async function fetchWaypointsFromServer(routeId) {
+            if (!routeId) {
+                showError("Route ID is missing. Please provide a valid route ID.");
+                return;
+            }
             try {
-                const response = await fetch(`(https://waypoints-prht.onrender.com/get-waypoints/${routeId}`);
+                const response = await fetch(`https://waypoints-prht.onrender.com/get-waypoints/${routeId}`);
                 if (!response.ok) {
                     throw new Error(`Failed to fetch waypoints: ${response.statusText}`);
                 }
@@ -113,6 +118,8 @@
                 showError(`Error fetching waypoints: ${error.message}`);
             }
         }
+
+        
 
         // Calculate relative position to a waypoint
         function calculateRelativePosition(currentLocation, waypoint) {
