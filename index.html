@@ -96,7 +96,7 @@
             const routeId = new URLSearchParams(window.location.search).get('routeId');
 
             try {
-                const response = await fetch(`(https://waypoints-prht.onrender.com/get-waypoints/${routeId}`);
+                const response = await fetch(`(https://waypoints-prht.onrender.com/get-waypoints?routeId=${routeId}`);
                 if (!response.ok) {
                     throw new Error(`Failed to fetch waypoints: ${response.statusText}`);
                 }
