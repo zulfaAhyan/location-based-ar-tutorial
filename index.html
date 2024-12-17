@@ -92,32 +92,42 @@
         }
 
 
-        // Fetch waypoints from the server
         async function fetchWaypointsFromServer(routeId) {
             if (!routeId) {
                 showError("Route ID is missing. Please provide a valid route ID.");
                 return;
             }
+        
             try {
                 const response = await fetch(`https://waypoints-prht.onrender.com/get-waypoints/${routeId}`);
                 if (!response.ok) {
                     throw new Error(`Failed to fetch waypoints: ${response.statusText}`);
                 }
+        
+                // Parse the JSON response
                 const data = await response.json();
-                waypoints = data.map(waypoint => ({
-                    latitude: waypoint.lat,
-                    longitude: waypoint.lng,
-                    type: waypoint.type || "default",
-                    heading: waypoint.heading || 0,
-                    speedLimit: waypoint.speedLimit || 0,
-                    roadType: waypoint.roadType || "unknown"
-                }));
-                console.log("Waypoints loaded:", waypoints);
+                console.log("Server response:", data);
+        
+                // Extract the waypoints array from the response
+                if (data && Array.isArray(data.waypoints)) {
+                    waypoints = data.waypoints.map(waypoint => ({
+                        latitude: waypoint.lat,
+                        longitude: waypoint.lng,
+                        type: waypoint.type || "default",
+                        heading: waypoint.heading || 0,
+                        speedLimit: waypoint.speedLimit || 0,
+                        roadType: waypoint.roadType || "unknown"
+                    }));
+                    console.log("Waypoints loaded:", waypoints);
+                } else {
+                    throw new Error("Invalid waypoints format received from the server.");
+                }
             } catch (error) {
                 console.error("Error fetching waypoints:", error);
                 showError(`Error fetching waypoints: ${error.message}`);
             }
         }
+
 
         
 
