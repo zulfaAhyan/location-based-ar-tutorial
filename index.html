@@ -283,32 +283,53 @@
       createPathLine(markerPoints, waypoints);
     }
 
-    async function startAR() {
-      try {
-        if (!('xr' in navigator)) {
-          throw new Error('WebXR not supported in this browser');
+
+
+        async function startAR() {
+        try {
+          if (!('xr' in navigator)) {
+            throw new Error('WebXR not supported in this browser');
+          }
+  
+          const isSupported = await navigator.xr.isSessionSupported('immersive-ar');
+          if (!isSupported) {
+            throw new Error('AR not supported on this device');
+          }
+  
+          const arButton = ARButton.createButton(renderer, {
+            requiredFeatures: ['hit-test'],
+            optionalFeatures: ['dom-overlay'],
+            domOverlay: { root: document.body },
+            // Add session start/end handlers
+            onSessionStarted: () => {
+              // Hide our custom button when the AR session actually starts
+              document.getElementById("enter-ar").style.display = "none";
+            },
+            onSessionEnded: () => {
+              // Show our custom button when the AR session ends
+              document.getElementById("enter-ar").style.display = "block";
+            }
+          });
+          document.body.appendChild(arButton);
+  
+          renderer.setAnimationLoop(() => {
+            renderer.render(scene, camera);
+          });
+        } catch (error) {
+          console.error("Error starting AR session:", error);
+          alert(`AR Error: ${error.message}`);
+          // Show the button again if AR fails to start
+          document.getElementById("enter-ar").style.display = "block";
         }
-
-        const isSupported = await navigator.xr.isSessionSupported('immersive-ar');
-        if (!isSupported) {
-          throw new Error('AR not supported on this device');
-        }
-
-        const arButton = ARButton.createButton(renderer, {
-          requiredFeatures: ['hit-test'],
-          optionalFeatures: ['dom-overlay'],
-          domOverlay: { root: document.body }
-        });
-        document.body.appendChild(arButton);
-
-        renderer.setAnimationLoop(() => {
-          renderer.render(scene, camera);
-        });
-      } catch (error) {
-        console.error("Error starting AR session:", error);
-        alert(`AR Error: ${error.message}`);
       }
-    }
+  
+      // Modified event listener
+      document.getElementById("enter-ar").addEventListener("click", async () => {
+        // Don't hide the button immediately - let the session start handler do it
+        await startAR();
+        await initWaypoints();
+      });
+    
 
     document.getElementById("enter-ar").addEventListener("click", async () => {
       await startAR();
