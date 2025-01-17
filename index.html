@@ -34,43 +34,6 @@
     #enter-ar:hover {
       background: #0056b3;
     }
-    #status {
-      position: absolute;
-      top: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(0, 0, 0, 0.7);
-      color: white;
-      padding: 10px 20px;
-      border-radius: 20px;
-      font-size: 16px;
-      z-index: 1000;
-      display: none;
-    }
-    #compass {
-      position: absolute;
-      top: 70px;
-      right: 20px;
-      background: rgba(0, 0, 0, 0.7);
-      color: white;
-      padding: 10px;
-      border-radius: 50%;
-      width: 100px;
-      height: 100px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 14px;
-      z-index: 1000;
-    }
-    #compass::after {
-      content: '';
-      position: absolute;
-      width: 2px;
-      height: 40px;
-      background: red;
-      transform-origin: bottom;
-    }
     #debug {
       position: absolute;
       bottom: 20px;
@@ -84,13 +47,25 @@
       z-index: 1000;
       display: none;
     }
+    #status {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.7);
+      color: white;
+      padding: 10px 20px;
+      border-radius: 20px;
+      font-size: 16px;
+      z-index: 1000;
+      display: none;
+    }
   </style>
 </head>
 <body>
   <button id="enter-ar">Start AR Navigation</button>
-  <div id="status">Initializing...</div>
-  <div id="compass"></div>
   <div id="debug"></div>
+  <div id="status">Initializing...</div>
 
   <script type="module">
     import * as THREE from 'three';
@@ -112,7 +87,6 @@
         document.body.appendChild(this.renderer.domElement);
 
         this.setupLighting();
-        this.setupUI();
         this.setupEventListeners();
         
         this.currentPosition = null;
@@ -121,15 +95,8 @@
         this.navigationElements = new THREE.Group();
         this.scene.add(this.navigationElements);
 
-        // Add timing for smooth updates
-        this.lastUpdate = 0;
-        this.updateInterval = 100; // Update every 100ms
-      }
-
-      setupUI() {
         this.debug = document.getElementById('debug');
         this.status = document.getElementById('status');
-        this.compass = document.getElementById('compass');
       }
 
       setupLighting() {
@@ -166,7 +133,8 @@
         this.updateStatus('Requesting permissions...');
         
         // Request location permission
-        if (!('geolocation' in navigator)) {
+        const hasGeolocation = 'geolocation' in navigator;
+        if (!hasGeolocation) {
           throw new Error('Geolocation not supported');
         }
 
@@ -190,7 +158,6 @@
                 lng: position.coords.longitude,
                 accuracy: position.coords.accuracy
               };
-              this.log(`Position updated: ${position.coords.latitude}, ${position.coords.longitude}`);
               this.updateNavigation();
               resolve();
             },
@@ -207,54 +174,14 @@
       setupOrientation() {
         this.updateStatus('Setting up orientation tracking...');
         
-        return new Promise((resolve) => {
-          const handleOrientation = (event) => {
-            const now = Date.now();
-            if (now - this.lastUpdate < this.updateInterval) return;
-            this.lastUpdate = now;
-
-            if (event.absolute || 'webkitCompassHeading' in event) {
-              this.currentOrientation = {
-                alpha: event.webkitCompassHeading || event.alpha,
-                beta: event.beta,
-                gamma: event.gamma,
-                absolute: true
-              };
-            } else {
-              this.currentOrientation = {
-                alpha: event.alpha,
-                beta: event.beta,
-                gamma: event.gamma,
-                absolute: false
-              };
-              this.log('Using relative orientation');
-            }
-
-            // Update compass display
-            this.updateCompassDisplay();
-            this.updateNavigation();
+        window.addEventListener('deviceorientationabsolute', (event) => {
+          this.currentOrientation = {
+            alpha: event.alpha, // compass direction
+            beta: event.beta,   // front/back tilt
+            gamma: event.gamma  // left/right tilt
           };
-
-          if ('ondeviceorientationabsolute' in window) {
-            window.addEventListener('deviceorientationabsolute', handleOrientation);
-            this.log('Using absolute orientation');
-          } else {
-            window.addEventListener('deviceorientation', handleOrientation);
-            this.log('Using standard orientation');
-          }
-          
-          resolve();
+          this.updateNavigation();
         });
-      }
-
-      updateCompassDisplay() {
-        if (!this.currentOrientation) return;
-        
-        const heading = this.currentOrientation.alpha;
-        this.compass.style.display = 'block';
-        this.compass.textContent = `${Math.round(heading)}°`;
-        this.compass.style.setProperty('--rotation', `${heading}deg`);
-        this.compass.querySelector('::after').style.transform = `rotate(${heading}deg)`;
       }
 
       async loadWaypoints() {
@@ -276,84 +203,65 @@
         this.log(`Loaded ${this.waypoints.length} waypoints`);
       }
 
-      createArrow() {
-        const arrow = new THREE.Group();
+      createArrow(isFloating = false) {
+        const color = isFloating ? 0x2196F3 : 0xFFEB3B;
+        const arrowShape = new THREE.Shape();
+        
+        // Create arrow shape
+        arrowShape.moveTo(0, 0);
+        arrowShape.lineTo(0.15, -0.4);
+        arrowShape.lineTo(0.05, -0.4);
+        arrowShape.lineTo(0.05, -0.6);
+        arrowShape.lineTo(-0.05, -0.6);
+        arrowShape.lineTo(-0.05, -0.4);
+        arrowShape.lineTo(-0.15, -0.4);
+        arrowShape.lineTo(0, 0);
 
-        // Create arrow body
-        const bodyGeometry = new THREE.BoxGeometry(0.15, 0.4, 0.05);
-        const bodyMaterial = new THREE.MeshStandardMaterial({
-          color: 0x2196F3,
+        const extrudeSettings = {
+          depth: 0.02,
+          bevelEnabled: false
+        };
+
+        const geometry = new THREE.ExtrudeGeometry(arrowShape, extrudeSettings);
+        const material = new THREE.MeshStandardMaterial({
+          color: color,
           metalness: 0.3,
-          roughness: 0.4
-        });
-        const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
-        body.position.y = -0.2;
-        arrow.add(body);
-
-        // Create arrow head
-        const headGeometry = new THREE.ConeGeometry(0.15, 0.3, 32);
-        const head = new THREE.Mesh(headGeometry, bodyMaterial);
-        head.rotation.z = Math.PI;
-        arrow.add(head);
-
-        // Add glow effect
-        const glowMaterial = new THREE.MeshBasicMaterial({
-          color: 0x64B5F6,
+          roughness: 0.4,
           transparent: true,
-          opacity: 0.5
+          opacity: 0.9
         });
-        
-        const glowBody = new THREE.Mesh(bodyGeometry, glowMaterial);
-        const glowHead = new THREE.Mesh(headGeometry, glowMaterial);
-        glowBody.scale.multiplyScalar(1.2);
-        glowHead.scale.multiplyScalar(1.2);
-        glowBody.position.copy(body.position);
-        glowHead.rotation.copy(head.rotation);
-        
-        arrow.add(glowBody);
-        arrow.add(glowHead);
+
+        const arrow = new THREE.Mesh(geometry, material);
+
+        if (!isFloating) {
+          arrow.rotation.x = -Math.PI / 2; // Lay flat for ground arrows
+        }
 
         return arrow;
       }
 
-      createLabel(text, isDebug = false) {
+      createDistanceLabel(distance) {
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d');
-        canvas.width = isDebug ? 512 : 256;
-        canvas.height = isDebug ? 256 : 128;
-
-        if (isDebug) {
-          context.fillStyle = 'rgba(0, 0, 0, 0.8)';
-          context.fillRect(0, 0, canvas.width, canvas.height);
-        }
+        canvas.width = 256;
+        canvas.height = 128;
 
         context.fillStyle = 'white';
-        context.font = isDebug ? '24px Arial' : '48px Arial';
+        context.font = 'bold 48px Arial';
         context.textAlign = 'center';
         context.textBaseline = 'middle';
-
-        if (isDebug) {
-          const lines = text.split('\n');
-          lines.forEach((line, i) => {
-            context.fillText(line, canvas.width / 2, 60 + i * 30);
-          });
-        } else {
-          context.fillText(text, canvas.width / 2, canvas.height / 2);
-        }
+        context.fillText(`${distance}m`, 128, 64);
 
         const texture = new THREE.CanvasTexture(canvas);
         const material = new THREE.SpriteMaterial({ map: texture });
         const sprite = new THREE.Sprite(material);
-        sprite.scale.set(isDebug ? 1 : 0.5, isDebug ? 0.5 : 0.25, 1);
+        sprite.scale.set(0.5, 0.25, 1);
 
         return sprite;
       }
 
       updateNavigation() {
-        if (!this.currentPosition || !this.currentOrientation) {
-          this.updateStatus('Waiting for location and orientation...');
-          return;
-        }
+        if (!this.currentPosition || !this.currentOrientation) return;
 
         // Clear existing elements
         while (this.navigationElements.children.length > 0) {
@@ -362,60 +270,39 @@
 
         // Find closest waypoint
         const closestWaypoint = this.findClosestWaypoint();
-        if (!closestWaypoint) {
-          this.updateStatus('No waypoint found');
-          return;
-        }
+        if (!closestWaypoint) return;
 
-        // Calculate bearing to waypoint
-        const targetBearing = this.calculateBearing(
+        // Create new navigation elements
+        const arrow = this.createArrow(true);
+        const bearing = this.calculateBearing(
           this.currentPosition.lat,
           this.currentPosition.lng,
           closestWaypoint.lat,
           closestWaypoint.lng
         );
 
-        // Get device compass heading
-        let deviceHeading = this.currentOrientation.alpha || 0;
-        deviceHeading = (360 - deviceHeading) % 360;
+        // Position arrow based on device orientation
+        const compassHeading = 360 - this.currentOrientation.alpha;
+        const rotation = (bearing - compassHeading) * Math.PI / 180;
+        arrow.rotation.y = rotation;
 
-        // Calculate relative angle
-        let relativeAngle = (targetBearing - deviceHeading + 360) % 360;
-        const angleInRadians = (relativeAngle * Math.PI) / 180;
-
-        // Create arrow group
-        const arrowGroup = new THREE.Group();
-        
-        // Add main arrow
-        const arrow = this.createArrow();
-        arrow.rotation.set(0, angleInRadians, 0);
-        arrowGroup.add(arrow);
-
-        // Add distance label
+        // Add distance indicator
         const distance = this.calculateDistance(closestWaypoint);
-        const distanceLabel = this.createLabel(`${Math.round(distance)}m`);
-        distanceLabel.position.y = 0.3;
-        arrowGroup.add(distanceLabel);
+        const distanceLabel = this.createDistanceLabel(Math.round(distance));
+        distanceLabel.position.y = 0.5;
 
-        // Add debug label
-        const debugInfo = 
-          `Target: ${Math.round(targetBearing)}°\n` +
-          `Device: ${Math.round(deviceHeading)}°\n` +
-          `Relative: ${Math.round(relativeAngle)}°`;
-        const debugLabel = this.createLabel(debugInfo, true);
-        debugLabel.position.y = -0.3;
-        arrowGroup.add(debugLabel);
+        const container = new THREE.Group();
+        container.add(arrow);
+        container.add(distanceLabel);
 
-        // Position the entire group
-        arrowGroup.position.set(0, 1.6, -2);
-        this.navigationElements.add(arrowGroup);
+        // Position in front of user
+        container.position.z = -2;
+        container.position.y = 1.6; // Approximate eye level
 
+        this.navigationElements.add(container);
+        
         // Update status
-        this.updateStatus(
-          `Distance: ${Math.round(distance)}m | ` +
-          `Bearing: ${Math.round(targetBearing)}° | ` +
-          `Heading: ${Math.round(deviceHeading)}°`
-        );
+        this.updateStatus(`${Math.round(distance)}m to next turn`);
       }
 
       calculateDistance(waypoint) {
@@ -426,10 +313,10 @@
         const Δλ = (waypoint.lng - this.currentPosition.lng) * Math.PI / 180;
 
         const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
-            Math.cos(φ1) * Math.cos(φ2) *
-            Math.sin(Δλ/2) * Math.sin(Δλ/2);
+                 Math.cos(φ1) * Math.cos(φ2) *
+                 Math.sin(Δλ/2) * Math.sin(Δλ/2);
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-        
+
         return R * c;
       }
 
@@ -447,14 +334,10 @@
       }
 
       findClosestWaypoint() {
-        if (!this.waypoints.length) return null;
-
         let closest = null;
         let minDistance = Infinity;
 
         for (const waypoint of this.waypoints) {
-          if (!waypoint.lat || !waypoint.lng) continue;
-          
           const distance = this.calculateDistance(waypoint);
           if (distance < minDistance) {
             minDistance = distance;
@@ -496,7 +379,7 @@
 
       log(message) {
         console.log(message);
-        this.debug.textContent += `${message}\n`;
+        this.debug.textContent += message + '\n';
         this.debug.style.display = 'block';
       }
 
