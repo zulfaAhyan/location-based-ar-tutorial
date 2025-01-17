@@ -175,59 +175,92 @@
       return sprite;
     }
 
-    function createWaypointMarker(waypoint, position) {
+
+    function createWaypointMarker(waypoint, position, index, totalWaypoints) {
       if (!waypoint) {
         log("Invalid waypoint data");
         return null;
       }
-
+    
       const group = new THREE.Group();
-      // Use default config if type is not specified
       const config = waypointConfig[waypoint.type] || waypointConfig.default;
-
+    
       try {
-        // Base marker
-        const geometry = new THREE.CylinderGeometry(
-          0.1 * config.scale,
-          0.1 * config.scale,
-          config.height,
-          32
+        // Only create beacons for significant points
+        const shouldCreateBeacon = (
+          waypoint.type === 'turn' || 
+          waypoint.type === 'turn_warning' ||
+          index === 0 || // First waypoint
+          index === totalWaypoints - 1 || // Last waypoint
+          index % 10 === 0 // Every 10th waypoint
         );
-        const material = new THREE.MeshStandardMaterial({ 
-          color: config.color,
-          transparent: true,
-          opacity: 0.8
-        });
-        const marker = new THREE.Mesh(geometry, material);
-        marker.position.y = config.height / 2;
-        group.add(marker);
-
-        // Beacon
-        const beaconGeometry = new THREE.SphereGeometry(0.08 * config.scale, 32, 32);
-        const beaconMaterial = new THREE.MeshStandardMaterial({
-          color: 'white',
-          emissive: new THREE.Color(config.color),
-          emissiveIntensity: 0.8,
-          transparent: true,
-          opacity: 0.9
-        });
-        const beacon = new THREE.Mesh(beaconGeometry, beaconMaterial);
-        beacon.position.y = config.height + 0.1;
-
-        const animate = () => {
-          if (beacon) {
-            beacon.position.y = config.height + 0.1 + Math.sin(Date.now() * 0.003) * 0.05;
-            requestAnimationFrame(animate);
+    
+        // Create minimal marker for regular path points
+        if (!shouldCreateBeacon) {
+          // Small dot for regular path points
+          const dotGeometry = new THREE.SphereGeometry(0.03, 8, 8);
+          const dotMaterial = new THREE.MeshStandardMaterial({ 
+            color: config.color,
+            transparent: true,
+            opacity: 0.6
+          });
+          const dot = new THREE.Mesh(dotGeometry, dotMaterial);
+          dot.position.y = 0.1;
+          group.add(dot);
+        } else {
+          // Full marker with beacon for significant points
+          const geometry = new THREE.CylinderGeometry(
+            0.1 * config.scale,
+            0.1 * config.scale,
+            config.height,
+            16  // Reduced segments for better performance
+          );
+          const material = new THREE.MeshStandardMaterial({ 
+            color: config.color,
+            transparent: true,
+            opacity: 0.8
+          });
+          const marker = new THREE.Mesh(geometry, material);
+          marker.position.y = config.height / 2;
+          group.add(marker);
+    
+          // Add beacon only for significant points
+          const beaconGeometry = new THREE.SphereGeometry(0.08 * config.scale, 16, 16);
+          const beaconMaterial = new THREE.MeshStandardMaterial({
+            color: 'white',
+            emissive: new THREE.Color(config.color),
+            emissiveIntensity: 0.8,
+            transparent: true,
+            opacity: 0.9
+          });
+          const beacon = new THREE.Mesh(beaconGeometry, beaconMaterial);
+          beacon.position.y = config.height + 0.1;
+    
+          // Add animation only for turns and warnings
+          if (waypoint.type === 'turn' || waypoint.type === 'turn_warning') {
+            const animate = () => {
+              if (beacon) {
+                beacon.position.y = config.height + 0.1 + Math.sin(Date.now() * 0.003) * 0.05;
+                requestAnimationFrame(animate);
+              }
+            };
+            animate();
           }
-        };
-        animate();
-        group.add(beacon);
-
+          group.add(beacon);
+    
+          // Add distance indicator for significant points
+          if (waypoint.distanceToTurn) {
+            const distanceText = createTextSprite(`${Math.round(waypoint.distanceToTurn)}m`);
+            distanceText.position.set(0, config.height + 0.2, 0);
+            group.add(distanceText);
+          }
+        }
+    
         // Set position
         if (position) {
           group.position.set(position.x, 0, position.z);
         }
-
+    
         return group;
       } catch (error) {
         log(`Error creating waypoint marker: ${error.message}`);
@@ -238,19 +271,41 @@
     async function initWaypoints() {
       const loadingElement = document.getElementById('loading');
       loadingElement.style.display = 'block';
-      debug.textContent = ''; // Clear debug log
-
+      debug.textContent = '';
+    
       try {
         const waypoints = await loadWaypoints();
         if (!waypoints || waypoints.length === 0) {
           throw new Error('No waypoints found');
         }
-
+    
         log(`Processing ${waypoints.length} waypoints`);
         const positions = [];
         let firstWaypoint = null;
         
-        waypoints.forEach((wp, index) => {
+        // Filter out waypoints that are too close together
+        const filteredWaypoints = waypoints.filter((wp, index) => {
+          if (index === 0) return true;
+          if (!wp.lat || !wp.lng) return false;
+          
+          const prevWp = waypoints[index - 1];
+          const distance = calculateDistance(
+            prevWp.lat, prevWp.lng,
+            wp.lat, wp.lng
+          );
+          
+          // Keep points that are either:
+          // 1. At least 5 meters apart
+          // 2. Turn points
+          // 3. Start/end points
+          return distance > 5 || 
+                 wp.type === 'turn' || 
+                 wp.type === 'turn_warning' ||
+                 index === 0 || 
+                 index === waypoints.length - 1;
+        });
+    
+        filteredWaypoints.forEach((wp, index) => {
           if (wp && wp.lat && wp.lng) {
             if (!firstWaypoint) {
               firstWaypoint = wp;
@@ -264,31 +319,38 @@
             }
           }
         });
-
+    
         const scale = 0.01;
         const markerPoints = positions.map(pos => ({
           x: pos.x * scale,
           z: pos.z * scale
         }));
-
+    
         let markersCreated = 0;
         markerPoints.forEach((pos, index) => {
-          const marker = createWaypointMarker(waypoints[index], pos);
+          const marker = createWaypointMarker(
+            filteredWaypoints[index], 
+            pos, 
+            index, 
+            filteredWaypoints.length
+          );
           if (marker) {
             scene.add(marker);
             markersCreated++;
           }
         });
-
-        log(`Created ${markersCreated} markers`);
+    
+        log(`Created ${markersCreated} markers from ${waypoints.length} waypoints`);
         loadingElement.style.display = 'none';
-
+    
       } catch (error) {
         log(`Error in initWaypoints: ${error.message}`);
         loadingElement.textContent = `Error: ${error.message}`;
       }
     }
 
+
+    
     async function startAR() {
       try {
         if (!('xr' in navigator)) {
@@ -316,6 +378,23 @@
       }
     }
 
+
+    // Helper function to calculate distance between two points
+    function calculateDistance(lat1, lon1, lat2, lon2) {
+      const R = 6371000; // Earth's radius in meters
+      const φ1 = lat1 * Math.PI / 180;
+      const φ2 = lat2 * Math.PI / 180;
+      const Δφ = (lat2 - lat1) * Math.PI / 180;
+      const Δλ = (lon2 - lon1) * Math.PI / 180;
+    
+      const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+               Math.cos(φ1) * Math.cos(φ2) *
+               Math.sin(Δλ/2) * Math.sin(Δλ/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      
+      return R * c; // Distance in meters
+    }
+    
     // Event listeners
     document.getElementById("enter-ar").addEventListener("click", async () => {
       await startAR();
