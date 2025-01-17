@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
   <title>Enhanced WebXR Outdoor Navigation</title>
   <script type="importmap">
     {
@@ -34,373 +34,386 @@
     #enter-ar:hover {
       background: #0056b3;
     }
+    #loading {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0,0,0,0.8);
+      color: white;
+      padding: 20px;
+      border-radius: 8px;
+      display: none;
+      text-align: center;
+    }
     #debug {
       position: absolute;
-      bottom: 20px;
-      left: 20px;
-      background: rgba(0, 0, 0, 0.7);
+      bottom: 10px;
+      left: 10px;
+      background: rgba(0,0,0,0.7);
       color: white;
       padding: 10px;
+      font-size: 12px;
       border-radius: 4px;
-      font-size: 14px;
       max-width: 80%;
-      z-index: 1000;
-      display: none;
-    }
-    #status {
-      position: absolute;
-      top: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(0, 0, 0, 0.7);
-      color: white;
-      padding: 10px 20px;
-      border-radius: 20px;
-      font-size: 16px;
-      z-index: 1000;
+      word-wrap: break-word;
       display: none;
     }
   </style>
 </head>
 <body>
-  <button id="enter-ar">Start AR Navigation</button>
+  <button id="enter-ar">Enter AR</button>
+  <div id="loading">Loading waypoints...</div>
   <div id="debug"></div>
-  <div id="status">Initializing...</div>
 
   <script type="module">
     import * as THREE from 'three';
     import { ARButton } from 'three/addons/webxr/ARButton.js';
 
-    class ARNavigator {
-      constructor() {
-        this.scene = new THREE.Scene();
-        this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        this.renderer = new THREE.WebGLRenderer({
-          antialias: true,
-          alpha: true,
-          logarithmicDepthBuffer: true
-        });
+    // Scene setup
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      alpha: true,
+      logarithmicDepthBuffer: true
+    });
+    
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.xr.enabled = true;
+    document.body.appendChild(renderer.domElement);
 
-        this.renderer.setSize(window.innerWidth, window.innerHeight);
-        this.renderer.setPixelRatio(window.devicePixelRatio);
-        this.renderer.xr.enabled = true;
-        document.body.appendChild(this.renderer.domElement);
+    // Debug logging
+    const debug = document.getElementById('debug');
+    function log(message) {
+      console.log(message);
+      debug.textContent += message + '\n';
+      debug.style.display = 'block';
+    }
 
-        this.setupLighting();
-        this.setupEventListeners();
-        
-        this.currentPosition = null;
-        this.currentOrientation = null;
-        this.waypoints = [];
-        this.navigationElements = new THREE.Group();
-        this.scene.add(this.navigationElements);
+    // Enhanced lighting
+    const hemisphereLight = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    directionalLight.position.set(0, 10, 0);
+    scene.add(hemisphereLight);
+    scene.add(directionalLight);
 
-        this.debug = document.getElementById('debug');
-        this.status = document.getElementById('status');
+    // Waypoint configuration with optimized values
+    const waypointConfig = {
+      turn: {
+        color: 0xff0000,
+        scale: 0.3,
+        height: 0.5
+      },
+      turn_warning: {
+        color: 0xffaa00,
+        scale: 0.25,
+        height: 0.4
+      },
+      path: {
+        color: 0x00ff00,
+        scale: 0.2,
+        height: 0.3
+      },
+      default: {
+        color: 0x0000ff,
+        scale: 0.2,
+        height: 0.3
       }
+    };
 
-      setupLighting() {
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        directionalLight.position.set(0, 10, 0);
-        this.scene.add(ambientLight);
-        this.scene.add(directionalLight);
+    async function loadWaypoints() {
+      const routeId = new URLSearchParams(window.location.search).get('routeId');
+      if (!routeId) {
+        log("Route ID not provided");
+        return [];
       }
-
-      setupEventListeners() {
-        window.addEventListener('resize', () => {
-          if (!this.renderer.xr.isPresenting) {
-            this.camera.aspect = window.innerWidth / window.innerHeight;
-            this.camera.updateProjectionMatrix();
-            this.renderer.setSize(window.innerWidth, window.innerHeight);
-          }
-        });
-      }
-
-      async initialize() {
-        try {
-          await this.requestPermissions();
-          await this.setupGeolocation();
-          await this.setupOrientation();
-          await this.loadWaypoints();
-          this.startARSession();
-        } catch (error) {
-          this.showError(`Initialization failed: ${error.message}`);
-        }
-      }
-
-      async requestPermissions() {
-        this.updateStatus('Requesting permissions...');
-        
-        // Request location permission
-        const hasGeolocation = 'geolocation' in navigator;
-        if (!hasGeolocation) {
-          throw new Error('Geolocation not supported');
-        }
-
-        // Request device orientation permission on iOS
-        if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-          const permission = await DeviceOrientationEvent.requestPermission();
-          if (permission !== 'granted') {
-            throw new Error('Orientation permission denied');
-          }
-        }
-      }
-
-      async setupGeolocation() {
-        this.updateStatus('Setting up location tracking...');
-        
-        return new Promise((resolve, reject) => {
-          this.watchId = navigator.geolocation.watchPosition(
-            (position) => {
-              this.currentPosition = {
-                lat: position.coords.latitude,
-                lng: position.coords.longitude,
-                accuracy: position.coords.accuracy
-              };
-              this.updateNavigation();
-              resolve();
-            },
-            (error) => reject(`Geolocation error: ${error.message}`),
-            {
-              enableHighAccuracy: true,
-              maximumAge: 0,
-              timeout: 5000
-            }
-          );
-        });
-      }
-
-      setupOrientation() {
-        this.updateStatus('Setting up orientation tracking...');
-        
-        window.addEventListener('deviceorientationabsolute', (event) => {
-          this.currentOrientation = {
-            alpha: event.alpha, // compass direction
-            beta: event.beta,   // front/back tilt
-            gamma: event.gamma  // left/right tilt
-          };
-          this.updateNavigation();
-        });
-      }
-
-      async loadWaypoints() {
-        this.updateStatus('Loading route...');
-        
-        const routeId = new URLSearchParams(window.location.search).get('routeId');
-        if (!routeId) {
-          throw new Error('No route ID provided');
-        }
-
+      try {
+        // IMPORTANT: Make sure to wrap your URL string properly with quotes.
         const response = await fetch(`https://waypoints-prht.onrender.com/get-waypoints/${routeId}`);
         const data = await response.json();
-        this.waypoints = data.waypoints || [];
-        
-        if (this.waypoints.length === 0) {
-          throw new Error('No waypoints found');
-        }
-
-        this.log(`Loaded ${this.waypoints.length} waypoints`);
-      }
-
-      createArrow(isFloating = false) {
-        const color = isFloating ? 0x2196F3 : 0xFFEB3B;
-        const arrowShape = new THREE.Shape();
-        
-        // Create arrow shape
-        arrowShape.moveTo(0, 0);
-        arrowShape.lineTo(0.15, -0.4);
-        arrowShape.lineTo(0.05, -0.4);
-        arrowShape.lineTo(0.05, -0.6);
-        arrowShape.lineTo(-0.05, -0.6);
-        arrowShape.lineTo(-0.05, -0.4);
-        arrowShape.lineTo(-0.15, -0.4);
-        arrowShape.lineTo(0, 0);
-
-        const extrudeSettings = {
-          depth: 0.02,
-          bevelEnabled: false
-        };
-
-        const geometry = new THREE.ExtrudeGeometry(arrowShape, extrudeSettings);
-        const material = new THREE.MeshStandardMaterial({
-          color: color,
-          metalness: 0.3,
-          roughness: 0.4,
-          transparent: true,
-          opacity: 0.9
-        });
-
-        const arrow = new THREE.Mesh(geometry, material);
-
-        if (!isFloating) {
-          arrow.rotation.x = -Math.PI / 2; // Lay flat for ground arrows
-        }
-
-        return arrow;
-      }
-
-      createDistanceLabel(distance) {
-        const canvas = document.createElement('canvas');
-        const context = canvas.getContext('2d');
-        canvas.width = 256;
-        canvas.height = 128;
-
-        context.fillStyle = 'white';
-        context.font = 'bold 48px Arial';
-        context.textAlign = 'center';
-        context.textBaseline = 'middle';
-        context.fillText(`${distance}m`, 128, 64);
-
-        const texture = new THREE.CanvasTexture(canvas);
-        const material = new THREE.SpriteMaterial({ map: texture });
-        const sprite = new THREE.Sprite(material);
-        sprite.scale.set(0.5, 0.25, 1);
-
-        return sprite;
-      }
-
-      updateNavigation() {
-        if (!this.currentPosition || !this.currentOrientation) return;
-
-        // Clear existing elements
-        while (this.navigationElements.children.length > 0) {
-          this.navigationElements.remove(this.navigationElements.children[0]);
-        }
-
-        // Find closest waypoint
-        const closestWaypoint = this.findClosestWaypoint();
-        if (!closestWaypoint) return;
-
-        // Create new navigation elements
-        const arrow = this.createArrow(true);
-        const bearing = this.calculateBearing(
-          this.currentPosition.lat,
-          this.currentPosition.lng,
-          closestWaypoint.lat,
-          closestWaypoint.lng
-        );
-
-        // Position arrow based on device orientation
-        const compassHeading = 360 - this.currentOrientation.alpha;
-        const rotation = (bearing - compassHeading) * Math.PI / 180;
-        arrow.rotation.y = rotation;
-
-        // Add distance indicator
-        const distance = this.calculateDistance(closestWaypoint);
-        const distanceLabel = this.createDistanceLabel(Math.round(distance));
-        distanceLabel.position.y = 0.5;
-
-        const container = new THREE.Group();
-        container.add(arrow);
-        container.add(distanceLabel);
-
-        // Position in front of user
-        container.position.z = -2;
-        container.position.y = 1.6; // Approximate eye level
-
-        this.navigationElements.add(container);
-        
-        // Update status
-        this.updateStatus(`${Math.round(distance)}m to next turn`);
-      }
-
-      calculateDistance(waypoint) {
-        const R = 6371000; // Earth's radius in meters
-        const φ1 = this.currentPosition.lat * Math.PI / 180;
-        const φ2 = waypoint.lat * Math.PI / 180;
-        const Δφ = (waypoint.lat - this.currentPosition.lat) * Math.PI / 180;
-        const Δλ = (waypoint.lng - this.currentPosition.lng) * Math.PI / 180;
-
-        const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
-                 Math.cos(φ1) * Math.cos(φ2) *
-                 Math.sin(Δλ/2) * Math.sin(Δλ/2);
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-
-        return R * c;
-      }
-
-      calculateBearing(lat1, lon1, lat2, lon2) {
-        const φ1 = lat1 * Math.PI / 180;
-        const φ2 = lat2 * Math.PI / 180;
-        const λ1 = lon1 * Math.PI / 180;
-        const λ2 = lon2 * Math.PI / 180;
-
-        const y = Math.sin(λ2 - λ1) * Math.cos(φ2);
-        const x = Math.cos(φ1) * Math.sin(φ2) -
-                 Math.sin(φ1) * Math.cos(φ2) * Math.cos(λ2 - λ1);
-
-        return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
-      }
-
-      findClosestWaypoint() {
-        let closest = null;
-        let minDistance = Infinity;
-
-        for (const waypoint of this.waypoints) {
-          const distance = this.calculateDistance(waypoint);
-          if (distance < minDistance) {
-            minDistance = distance;
-            closest = waypoint;
-          }
-        }
-
-        return closest;
-      }
-
-      async startARSession() {
-        this.updateStatus('Starting AR...');
-        
-        try {
-          const arButton = ARButton.createButton(this.renderer, {
-            requiredFeatures: ['hit-test'],
-            optionalFeatures: ['dom-overlay'],
-            domOverlay: { root: document.body }
-          });
-          document.body.appendChild(arButton);
-
-          this.renderer.setAnimationLoop(() => {
-            this.renderer.render(this.scene, this.camera);
-          });
-        } catch (error) {
-          this.showError(`AR session failed: ${error.message}`);
-        }
-      }
-
-      updateStatus(message) {
-        this.status.textContent = message;
-        this.status.style.display = 'block';
-      }
-
-      showError(message) {
-        this.updateStatus(`Error: ${message}`);
-        console.error(message);
-      }
-
-      log(message) {
-        console.log(message);
-        this.debug.textContent += message + '\n';
-        this.debug.style.display = 'block';
-      }
-
-      dispose() {
-        if (this.watchId) {
-          navigator.geolocation.clearWatch(this.watchId);
-        }
-        this.renderer.dispose();
+        log(`Loaded ${data.waypoints?.length || 0} waypoints`);
+        return data.waypoints || [];
+      } catch (error) {
+        log(`Error fetching waypoints: ${error.message}`);
+        return [];
       }
     }
 
-    // Initialize the application
-    const arNavigator = new ARNavigator();
-    
-    document.getElementById('enter-ar').addEventListener('click', async () => {
+    function calculateDistance(lat1, lon1, lat2, lon2) {
+      const R = 6371000; // Earth's radius in meters
+      const φ1 = lat1 * Math.PI / 180;
+      const φ2 = lat2 * Math.PI / 180;
+      const Δφ = (lat2 - lat1) * Math.PI / 180;
+      const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+      const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+               Math.cos(φ1) * Math.cos(φ2) *
+               Math.sin(Δλ/2) * Math.sin(Δλ/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      
+      return R * c; // Distance in meters
+    }
+
+    function calculateRelativePosition(lat1, lon1, lat2, lon2) {
+      if (!lat1 || !lon1 || !lat2 || !lon2) {
+        log("Invalid coordinates provided");
+        return { x: 0, z: 0, distance: 0 };
+      }
+
+      const R = 6371000;
+      const φ1 = lat1 * Math.PI / 180;
+      const φ2 = lat2 * Math.PI / 180;
+      const Δφ = (lat2 - lat1) * Math.PI / 180;
+      const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+      // z-direction from delta in latitude
+      const z = Math.sin(Δφ) * R;
+      // x-direction from delta in longitude
+      const x = Math.cos(φ1) * Math.sin(Δλ) * R;
+      const distance = calculateDistance(lat1, lon1, lat2, lon2);
+
+      return { x, z, distance };
+    }
+
+    function createTextSprite(message) {
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      canvas.width = 256;
+      canvas.height = 128;
+
+      context.font = '64px Arial';
+      context.fillStyle = 'white';
+      context.textAlign = 'center';
+      context.fillText(message, 128, 64);
+
+      const texture = new THREE.CanvasTexture(canvas);
+      const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
+      const sprite = new THREE.Sprite(spriteMaterial);
+      sprite.scale.set(0.25, 0.125, 0.25);
+
+      return sprite;
+    }
+
+    function createWaypointMarker(waypoint, position, index, totalWaypoints) {
+      if (!waypoint) {
+        log("Invalid waypoint data");
+        return null;
+      }
+
+      const group = new THREE.Group();
+      const config = waypointConfig[waypoint.type] || waypointConfig.default;
+
       try {
-        document.getElementById('enter-ar').style.display = 'none';
-        await arNavigator.initialize();
+        // Determine if this point should have a beacon
+        const shouldCreateBeacon = (
+          waypoint.type === 'turn' || 
+          waypoint.type === 'turn_warning' ||
+          index === 0 || // First waypoint
+          index === totalWaypoints - 1 || // Last waypoint
+          index % 10 === 0 // Every 10th waypoint
+        );
+
+        if (!shouldCreateBeacon) {
+          // Simple dot for regular path points
+          const dotGeometry = new THREE.SphereGeometry(0.03, 8, 8);
+          const dotMaterial = new THREE.MeshStandardMaterial({ 
+            color: config.color,
+            transparent: true,
+            opacity: 0.6
+          });
+          const dot = new THREE.Mesh(dotGeometry, dotMaterial);
+          dot.position.y = 0.1;
+          group.add(dot);
+        } else {
+          // Full marker with beacon
+          const geometry = new THREE.CylinderGeometry(
+            0.1 * config.scale,
+            0.1 * config.scale,
+            config.height,
+            16
+          );
+          const material = new THREE.MeshStandardMaterial({ 
+            color: config.color,
+            transparent: true,
+            opacity: 0.8
+          });
+          const marker = new THREE.Mesh(geometry, material);
+          marker.position.y = config.height / 2;
+          group.add(marker);
+
+          // Add beacon
+          const beaconGeometry = new THREE.SphereGeometry(0.08 * config.scale, 16, 16);
+          const beaconMaterial = new THREE.MeshStandardMaterial({
+            color: 'white',
+            emissive: new THREE.Color(config.color),
+            emissiveIntensity: 0.8,
+            transparent: true,
+            opacity: 0.9
+          });
+          const beacon = new THREE.Mesh(beaconGeometry, beaconMaterial);
+          beacon.position.y = config.height + 0.1;
+
+          // Animate only turns and warnings
+          if (waypoint.type === 'turn' || waypoint.type === 'turn_warning') {
+            const animate = () => {
+              if (beacon) {
+                beacon.position.y = config.height + 0.1 + Math.sin(Date.now() * 0.003) * 0.05;
+                requestAnimationFrame(animate);
+              }
+            };
+            animate();
+          }
+          group.add(beacon);
+
+          // Add distance indicator
+          if (waypoint.distanceToTurn) {
+            const distanceText = createTextSprite(`${Math.round(waypoint.distanceToTurn)}m`);
+            distanceText.position.set(0, config.height + 0.2, 0);
+            group.add(distanceText);
+          }
+        }
+
+        if (position) {
+          group.position.set(position.x, 0, position.z);
+        }
+
+        return group;
       } catch (error) {
-        console.error('Failed to initialize AR:', error);
-        alert(`Failed to start AR: ${error.message}`);
+        log(`Error creating waypoint marker: ${error.message}`);
+        return null;
+      }
+    }
+
+    async function initWaypoints() {
+      const loadingElement = document.getElementById('loading');
+      loadingElement.style.display = 'block';
+      debug.textContent = '';
+
+      try {
+        const waypoints = await loadWaypoints();
+        if (!waypoints || waypoints.length === 0) {
+          throw new Error('No waypoints found');
+        }
+
+        log(`Processing ${waypoints.length} waypoints`);
+        
+        // CHANGED: Reduce distance filter from 5 to 1
+        const filteredWaypoints = waypoints.filter((wp, index) => {
+          if (index === 0) return true;
+          if (!wp.lat || !wp.lng) return false;
+          
+          const prevWp = waypoints[index - 1];
+          const distance = calculateDistance(
+            prevWp.lat, prevWp.lng,
+            wp.lat, wp.lng
+          );
+          
+          return (
+            distance > 1 ||            // was > 5
+            wp.type === 'turn' ||
+            wp.type === 'turn_warning' ||
+            index === 0 ||
+            index === waypoints.length - 1
+          );
+        });
+
+        const positions = [];
+        let firstWaypoint = null;
+
+        filteredWaypoints.forEach((wp, index) => {
+          if (wp && wp.lat && wp.lng) {
+            if (!firstWaypoint) {
+              firstWaypoint = wp;
+              positions.push({ x: 0, z: 0 });
+            } else {
+              const pos = calculateRelativePosition(
+                firstWaypoint.lat, firstWaypoint.lng,
+                wp.lat, wp.lng
+              );
+              positions.push(pos);
+            }
+          }
+        });
+
+        // CHANGED: Increase scale from 0.01 to 0.1
+        const scale = 0.1;
+        const markerPoints = positions.map((pos, idx) => {
+          // Log for debugging
+          console.log(
+            `Filtered WP #${idx}, lat: ${filteredWaypoints[idx]?.lat}, ` +
+            `lng: ${filteredWaypoints[idx]?.lng}, x: ${pos.x}, z: ${pos.z}`
+          );
+          return {
+            x: pos.x * scale,
+            z: pos.z * scale
+          };
+        });
+
+        let markersCreated = 0;
+        markerPoints.forEach((pos, index) => {
+          const marker = createWaypointMarker(
+            filteredWaypoints[index], 
+            pos, 
+            index, 
+            filteredWaypoints.length
+          );
+          if (marker) {
+            scene.add(marker);
+            markersCreated++;
+          }
+        });
+
+        log(`Created ${markersCreated} markers from ${waypoints.length} original waypoints`);
+        loadingElement.style.display = 'none';
+
+      } catch (error) {
+        log(`Error in initWaypoints: ${error.message}`);
+        loadingElement.textContent = `Error: ${error.message}`;
+      }
+    }
+
+    async function startAR() {
+      try {
+        if (!('xr' in navigator)) {
+          throw new Error('WebXR not supported in this browser');
+        }
+
+        const isSupported = await navigator.xr.isSessionSupported('immersive-ar');
+        if (!isSupported) {
+          throw new Error('AR not supported on this device');
+        }
+
+        const arButton = ARButton.createButton(renderer, {
+          requiredFeatures: ['hit-test'],
+          optionalFeatures: ['dom-overlay'],
+          domOverlay: { root: document.body }
+        });
+        document.body.appendChild(arButton);
+
+        renderer.setAnimationLoop(() => {
+          renderer.render(scene, camera);
+        });
+      } catch (error) {
+        log(`AR Error: ${error.message}`);
+        alert(`AR Error: ${error.message}`);
+      }
+    }
+
+    // Event listeners
+    document.getElementById("enter-ar").addEventListener("click", async () => {
+      await startAR();
+      await initWaypoints();
+      document.getElementById("enter-ar").style.display = "none";
+    });
+
+    // Only update size if not in XR mode
+    window.addEventListener("resize", () => {
+      if (!renderer.xr.isPresenting) {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
       }
     });
   </script>
