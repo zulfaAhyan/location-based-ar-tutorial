@@ -29,6 +29,10 @@
       border: none;
       border-radius: 4px;
       cursor: pointer;
+      font-size: 16px;
+    }
+    #enter-ar:hover {
+      background: #0056b3;
     }
     #loading {
       position: absolute;
@@ -40,6 +44,7 @@
       padding: 20px;
       border-radius: 8px;
       display: none;
+      text-align: center;
     }
     #debug {
       position: absolute;
@@ -49,6 +54,9 @@
       color: white;
       padding: 10px;
       font-size: 12px;
+      border-radius: 4px;
+      max-width: 80%;
+      word-wrap: break-word;
       display: none;
     }
   </style>
@@ -84,14 +92,14 @@
       debug.style.display = 'block';
     }
 
-    // Lighting
+    // Enhanced lighting
     const hemisphereLight = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
     const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
     directionalLight.position.set(0, 10, 0);
     scene.add(hemisphereLight);
     scene.add(directionalLight);
 
-    // Waypoint configuration with default type
+    // Waypoint configuration with optimized values
     const waypointConfig = {
       turn: {
         color: 0xff0000,
@@ -108,7 +116,7 @@
         scale: 0.2,
         height: 0.3
       },
-      default: {  // Default configuration
+      default: {
         color: 0x0000ff,
         scale: 0.2,
         height: 0.3
@@ -132,6 +140,21 @@
       }
     }
 
+    function calculateDistance(lat1, lon1, lat2, lon2) {
+      const R = 6371000; // Earth's radius in meters
+      const φ1 = lat1 * Math.PI / 180;
+      const φ2 = lat2 * Math.PI / 180;
+      const Δφ = (lat2 - lat1) * Math.PI / 180;
+      const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+      const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+               Math.cos(φ1) * Math.cos(φ2) *
+               Math.sin(Δλ/2) * Math.sin(Δλ/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      
+      return R * c; // Distance in meters
+    }
+
     function calculateRelativePosition(lat1, lon1, lat2, lon2) {
       if (!lat1 || !lon1 || !lat2 || !lon2) {
         log("Invalid coordinates provided");
@@ -144,16 +167,11 @@
       const Δφ = (lat2 - lat1) * Math.PI / 180;
       const Δλ = (lon2 - lon1) * Math.PI / 180;
 
-      const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
-                Math.cos(φ1) * Math.cos(φ2) *
-                Math.sin(Δλ/2) * Math.sin(Δλ/2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-      const d = R * c;
-
       const z = Math.sin(Δφ) * R;
       const x = Math.cos(φ1) * Math.sin(Δλ) * R;
+      const distance = calculateDistance(lat1, lon1, lat2, lon2);
 
-      return { x, z, distance: d };
+      return { x, z, distance };
     }
 
     function createTextSprite(message) {
@@ -175,18 +193,17 @@
       return sprite;
     }
 
-
     function createWaypointMarker(waypoint, position, index, totalWaypoints) {
       if (!waypoint) {
         log("Invalid waypoint data");
         return null;
       }
-    
+
       const group = new THREE.Group();
       const config = waypointConfig[waypoint.type] || waypointConfig.default;
-    
+
       try {
-        // Only create beacons for significant points
+        // Determine if this point should have a beacon
         const shouldCreateBeacon = (
           waypoint.type === 'turn' || 
           waypoint.type === 'turn_warning' ||
@@ -194,10 +211,9 @@
           index === totalWaypoints - 1 || // Last waypoint
           index % 10 === 0 // Every 10th waypoint
         );
-    
-        // Create minimal marker for regular path points
+
         if (!shouldCreateBeacon) {
-          // Small dot for regular path points
+          // Simple dot for regular path points
           const dotGeometry = new THREE.SphereGeometry(0.03, 8, 8);
           const dotMaterial = new THREE.MeshStandardMaterial({ 
             color: config.color,
@@ -208,12 +224,12 @@
           dot.position.y = 0.1;
           group.add(dot);
         } else {
-          // Full marker with beacon for significant points
+          // Full marker with beacon
           const geometry = new THREE.CylinderGeometry(
             0.1 * config.scale,
             0.1 * config.scale,
             config.height,
-            16  // Reduced segments for better performance
+            16
           );
           const material = new THREE.MeshStandardMaterial({ 
             color: config.color,
@@ -223,8 +239,8 @@
           const marker = new THREE.Mesh(geometry, material);
           marker.position.y = config.height / 2;
           group.add(marker);
-    
-          // Add beacon only for significant points
+
+          // Add beacon
           const beaconGeometry = new THREE.SphereGeometry(0.08 * config.scale, 16, 16);
           const beaconMaterial = new THREE.MeshStandardMaterial({
             color: 'white',
@@ -235,8 +251,8 @@
           });
           const beacon = new THREE.Mesh(beaconGeometry, beaconMaterial);
           beacon.position.y = config.height + 0.1;
-    
-          // Add animation only for turns and warnings
+
+          // Animate only turns and warnings
           if (waypoint.type === 'turn' || waypoint.type === 'turn_warning') {
             const animate = () => {
               if (beacon) {
@@ -247,20 +263,19 @@
             animate();
           }
           group.add(beacon);
-    
-          // Add distance indicator for significant points
+
+          // Add distance indicator
           if (waypoint.distanceToTurn) {
             const distanceText = createTextSprite(`${Math.round(waypoint.distanceToTurn)}m`);
             distanceText.position.set(0, config.height + 0.2, 0);
             group.add(distanceText);
           }
         }
-    
-        // Set position
+
         if (position) {
           group.position.set(position.x, 0, position.z);
         }
-    
+
         return group;
       } catch (error) {
         log(`Error creating waypoint marker: ${error.message}`);
@@ -272,18 +287,16 @@
       const loadingElement = document.getElementById('loading');
       loadingElement.style.display = 'block';
       debug.textContent = '';
-    
+
       try {
         const waypoints = await loadWaypoints();
         if (!waypoints || waypoints.length === 0) {
           throw new Error('No waypoints found');
         }
-    
+
         log(`Processing ${waypoints.length} waypoints`);
-        const positions = [];
-        let firstWaypoint = null;
         
-        // Filter out waypoints that are too close together
+        // Filter waypoints
         const filteredWaypoints = waypoints.filter((wp, index) => {
           if (index === 0) return true;
           if (!wp.lat || !wp.lng) return false;
@@ -294,17 +307,16 @@
             wp.lat, wp.lng
           );
           
-          // Keep points that are either:
-          // 1. At least 5 meters apart
-          // 2. Turn points
-          // 3. Start/end points
           return distance > 5 || 
                  wp.type === 'turn' || 
                  wp.type === 'turn_warning' ||
                  index === 0 || 
                  index === waypoints.length - 1;
         });
-    
+
+        const positions = [];
+        let firstWaypoint = null;
+
         filteredWaypoints.forEach((wp, index) => {
           if (wp && wp.lat && wp.lng) {
             if (!firstWaypoint) {
@@ -319,13 +331,13 @@
             }
           }
         });
-    
+
         const scale = 0.01;
         const markerPoints = positions.map(pos => ({
           x: pos.x * scale,
           z: pos.z * scale
         }));
-    
+
         let markersCreated = 0;
         markerPoints.forEach((pos, index) => {
           const marker = createWaypointMarker(
@@ -339,18 +351,16 @@
             markersCreated++;
           }
         });
-    
-        log(`Created ${markersCreated} markers from ${waypoints.length} waypoints`);
+
+        log(`Created ${markersCreated} markers from ${waypoints.length} original waypoints`);
         loadingElement.style.display = 'none';
-    
+
       } catch (error) {
         log(`Error in initWaypoints: ${error.message}`);
         loadingElement.textContent = `Error: ${error.message}`;
       }
     }
 
-
-    
     async function startAR() {
       try {
         if (!('xr' in navigator)) {
@@ -378,23 +388,6 @@
       }
     }
 
-
-    // Helper function to calculate distance between two points
-    function calculateDistance(lat1, lon1, lat2, lon2) {
-      const R = 6371000; // Earth's radius in meters
-      const φ1 = lat1 * Math.PI / 180;
-      const φ2 = lat2 * Math.PI / 180;
-      const Δφ = (lat2 - lat1) * Math.PI / 180;
-      const Δλ = (lon2 - lon1) * Math.PI / 180;
-    
-      const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
-               Math.cos(φ1) * Math.cos(φ2) *
-               Math.sin(Δλ/2) * Math.sin(Δλ/2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-      
-      return R * c; // Distance in meters
-    }
-    
     // Event listeners
     document.getElementById("enter-ar").addEventListener("click", async () => {
       await startAR();
