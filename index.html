@@ -210,7 +210,7 @@
         const shouldCreateBeacon = (
           waypoint.type === 'turn' || 
           waypoint.type === 'turn_warning' ||
-          index === 0 || // First waypoint
+          // index === 0 || // First waypoint
           index === totalWaypoints - 1 || // Last waypoint
           index % 10 === 0 // Every 10th waypoint
         );
