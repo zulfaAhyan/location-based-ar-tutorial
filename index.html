@@ -130,10 +130,10 @@
         return [];
       }
       try {
-        // IMPORTANT: Make sure to wrap your URL string properly with quotes.
         const response = await fetch(`https://waypoints-prht.onrender.com/get-waypoints/${routeId}`);
         const data = await response.json();
-        log(`Loaded ${data.waypoints?.length || 0} waypoints`);
+        log(`Loaded ${data.waypoints?.length || 0} waypoints from server`);
+        console.log("Waypoints returned from server:", data.waypoints);
         return data.waypoints || [];
       } catch (error) {
         log(`Error fetching waypoints: ${error.message}`);
@@ -206,7 +206,7 @@
       const config = waypointConfig[waypoint.type] || waypointConfig.default;
 
       try {
-        // Determine if this point should have a beacon
+        // Decide if this point should have a beacon or be a small dot
         const shouldCreateBeacon = (
           waypoint.type === 'turn' || 
           waypoint.type === 'turn_warning' ||
@@ -216,18 +216,18 @@
         );
 
         if (!shouldCreateBeacon) {
-          // Simple dot for regular path points
-          const dotGeometry = new THREE.SphereGeometry(0.03, 8, 8);
+          // Increase size and remove partial transparency for better visibility
+          const dotGeometry = new THREE.SphereGeometry(0.1, 16, 16);
           const dotMaterial = new THREE.MeshStandardMaterial({ 
             color: config.color,
             transparent: true,
-            opacity: 0.6
+            opacity: 1.0 // fully opaque
           });
           const dot = new THREE.Mesh(dotGeometry, dotMaterial);
           dot.position.y = 0.1;
           group.add(dot);
         } else {
-          // Full marker with beacon
+          // Marker with cylinder + beacon sphere
           const geometry = new THREE.CylinderGeometry(
             0.1 * config.scale,
             0.1 * config.scale,
@@ -255,7 +255,7 @@
           const beacon = new THREE.Mesh(beaconGeometry, beaconMaterial);
           beacon.position.y = config.height + 0.1;
 
-          // Animate only turns and warnings
+          // Animate only turns/warnings
           if (waypoint.type === 'turn' || waypoint.type === 'turn_warning') {
             const animate = () => {
               if (beacon) {
@@ -267,7 +267,7 @@
           }
           group.add(beacon);
 
-          // Add distance indicator
+          // Add distance text if available
           if (waypoint.distanceToTurn) {
             const distanceText = createTextSprite(`${Math.round(waypoint.distanceToTurn)}m`);
             distanceText.position.set(0, config.height + 0.2, 0);
@@ -297,27 +297,28 @@
           throw new Error('No waypoints found');
         }
 
-        log(`Processing ${waypoints.length} waypoints`);
+        log(`Total waypoints from server: ${waypoints.length}`);
         
-        // CHANGED: Reduce distance filter from 5 to 1
+        // Remove or drastically reduce the distance filter
         const filteredWaypoints = waypoints.filter((wp, index) => {
-          if (index === 0) return true;
           if (!wp.lat || !wp.lng) return false;
-          
+          if (index === 0) return true; // Always keep first
+          if (index === waypoints.length - 1) return true; // Always keep last
+
           const prevWp = waypoints[index - 1];
           const distance = calculateDistance(
             prevWp.lat, prevWp.lng,
             wp.lat, wp.lng
           );
-          
-          return (
-            distance > 1 ||            // was > 5
-            wp.type === 'turn' ||
-            wp.type === 'turn_warning' ||
-            index === 0 ||
-            index === waypoints.length - 1
-          );
+
+          // Keep this waypoint if it's more than 0.5m away or is special type
+          if (distance > 0.5) return true;
+          if (wp.type === 'turn' || wp.type === 'turn_warning') return true;
+          return false;
         });
+
+        log(`Filtered down to ${filteredWaypoints.length} waypoints`);
+        console.log("Filtered waypoints:", filteredWaypoints);
 
         const positions = [];
         let firstWaypoint = null;
@@ -337,10 +338,9 @@
           }
         });
 
-        // CHANGED: Increase scale from 0.01 to 0.1
+        // Keep scale at 0.1 so waypoints aren't too close together
         const scale = 0.1;
         const markerPoints = positions.map((pos, idx) => {
-          // Log for debugging
           console.log(
             `Filtered WP #${idx}, lat: ${filteredWaypoints[idx]?.lat}, ` +
             `lng: ${filteredWaypoints[idx]?.lng}, x: ${pos.x}, z: ${pos.z}`
