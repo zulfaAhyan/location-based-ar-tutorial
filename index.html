@@ -99,27 +99,19 @@
     scene.add(hemisphereLight);
     scene.add(directionalLight);
 
-    // Waypoint configuration with optimized values
+    // Waypoint configuration (you can still use different colors per type if desired)
     const waypointConfig = {
       turn: {
-        color: 0xff0000,
-        scale: 0.3,
-        height: 0.5
+        color: 0xff0000
       },
       turn_warning: {
-        color: 0xffaa00,
-        scale: 0.25,
-        height: 0.4
+        color: 0xffaa00
       },
       path: {
-        color: 0x00ff00,
-        scale: 0.2,
-        height: 0.3
+        color: 0x00ff00
       },
       default: {
-        color: 0x0000ff,
-        scale: 0.2,
-        height: 0.3
+        color: 0x0000ff
       }
     };
 
@@ -177,62 +169,35 @@
       return { x, z, distance };
     }
 
-    function createTextSprite(message) {
-      const canvas = document.createElement('canvas');
-      const context = canvas.getContext('2d');
-      canvas.width = 256;
-      canvas.height = 128;
-
-      context.font = '64px Arial';
-      context.fillStyle = 'white';
-      context.textAlign = 'center';
-      context.fillText(message, 128, 64);
-
-      const texture = new THREE.CanvasTexture(canvas);
-      const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
-      const sprite = new THREE.Sprite(spriteMaterial);
-      sprite.scale.set(0.25, 0.125, 0.25);
-
-      return sprite;
-    }
-	function createWaypointMarker(waypoint, position, index, totalWaypoints) {
-	if (!waypoint) {
-    log("Invalid waypoint data");
-    return null;
-	}
-
-		const group = new THREE.Group();
-
-
-		const lineMaterial = new THREE.LineBasicMaterial({ color: 0x0000ff });
-  
-  const points = [
-    new THREE.Vector3(0, 0, 0),
-    new THREE.Vector3(0, 1, 0)
-  ];
-  
-  const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
-  const line = new THREE.Line(lineGeometry, lineMaterial);
-
-
-  group.add(line);
-
-
-  if (waypoint.distanceToTurn) {
-    const distanceText = createTextSprite(`${Math.round(waypoint.distanceToTurn)}m`);
-    distanceText.position.set(0, 1.2, 0);
-    group.add(distanceText);
-  }
-
-
-  if (position) {
-    group.position.set(position.x, 0, position.z);
-  }
-
-  return group;
-}
-
     
+    function createPathSegment(start, end, color = 0x00ff00) {
+      // Calculate the difference
+      const dx = end.x - start.x;
+      const dz = end.z - start.z;
+      const distance = Math.sqrt(dx * dx + dz * dz);
+
+      // Create a box geometry that represents the path segment:
+      //   length  = distance between start and end
+      //   height  = a small thickness, e.g. 0.02
+      //   width   = how “wide” you want the path to be
+      const geometry = new THREE.BoxGeometry(distance, 1, 1);
+      const material = new THREE.MeshStandardMaterial({ color });
+
+      const segment = new THREE.Mesh(geometry, material);
+
+      // Position the segment at the midpoint between start and end
+      const midpointX = start.x + dx / 2;
+      const midpointZ = start.z + dz / 2;
+      segment.position.set(midpointX, 0, midpointZ);
+
+      
+      // We compute the angle and rotate around Y.
+      const angle = Math.atan2(dz, dx);
+      segment.rotation.y = -angle;
+
+      return segment;
+    }
+
     async function initWaypoints() {
       const loadingElement = document.getElementById('loading');
       loadingElement.style.display = 'block';
@@ -246,11 +211,11 @@
 
         log(`Total waypoints from server: ${waypoints.length}`);
         
-        // Remove or drastically reduce the distance filter
+        // Minimal distance-based filtering (similar to your original logic):
         const filteredWaypoints = waypoints.filter((wp, index) => {
           if (!wp.lat || !wp.lng) return false;
-          if (index === 0) return true; // Always keep first
-          if (index === waypoints.length - 1) return true; // Always keep last
+          if (index === 0) return true; // keep first
+          if (index === waypoints.length - 1) return true; // keep last
 
           const prevWp = waypoints[index - 1];
           const distance = calculateDistance(
@@ -258,7 +223,7 @@
             wp.lat, wp.lng
           );
 
-          // Keep this waypoint if it's more than 0.5m away or is special type
+          // Keep if more than 0.5m away or if it’s a special type
           if (distance > 0.5) return true;
           if (wp.type === 'turn' || wp.type === 'turn_warning') return true;
           return false;
@@ -267,9 +232,9 @@
         log(`Filtered down to ${filteredWaypoints.length} waypoints`);
         console.log("Filtered waypoints:", filteredWaypoints);
 
+        // Compute positions relative to the first waypoint
         const positions = [];
         let firstWaypoint = null;
-
         filteredWaypoints.forEach((wp, index) => {
           if (wp && wp.lat && wp.lng) {
             if (!firstWaypoint) {
@@ -285,7 +250,7 @@
           }
         });
 
-        // Keep scale at 0.1 so waypoints aren't too close together
+        // Scale down so they are not too far apart in the AR space
         const scale = 0.1;
         const markerPoints = positions.map((pos, idx) => {
           console.log(
@@ -298,21 +263,24 @@
           };
         });
 
-        let markersCreated = 0;
-        markerPoints.forEach((pos, index) => {
-          const marker = createWaypointMarker(
-            filteredWaypoints[index], 
-            pos, 
-            index, 
-            filteredWaypoints.length
+        // Create path segments for consecutive waypoints
+        let segmentsCreated = 0;
+        for (let i = 0; i < markerPoints.length - 1; i++) {
+          // Optionally pick a color based on the type of the “starting” waypoint
+          const wpType = filteredWaypoints[i]?.type;
+          const config = waypointConfig[wpType] || waypointConfig.default;
+          
+          // Create a thick horizontal line from markerPoints[i] to markerPoints[i+1]
+          const segment = createPathSegment(
+            markerPoints[i],
+            markerPoints[i + 1],
+            config.color
           );
-          if (marker) {
-            scene.add(marker);
-            markersCreated++;
-          }
-        });
+          scene.add(segment);
+          segmentsCreated++;
+        }
 
-        log(`Created ${markersCreated} markers from ${waypoints.length} original waypoints`);
+        log(`Created ${segmentsCreated} thick path segments`);
         loadingElement.style.display = 'none';
 
       } catch (error) {
