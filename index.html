@@ -195,97 +195,44 @@
 
       return sprite;
     }
+	function createWaypointMarker(waypoint, position, index, totalWaypoints) {
+	if (!waypoint) {
+    log("Invalid waypoint data");
+    return null;
+	}
 
-    function createWaypointMarker(waypoint, position, index, totalWaypoints) {
-      if (!waypoint) {
-        log("Invalid waypoint data");
-        return null;
-      }
+		const group = new THREE.Group();
 
-      const group = new THREE.Group();
-      const config = waypointConfig[waypoint.type] || waypointConfig.default;
 
-      try {
-        // Decide if this point should have a beacon or be a small dot
-        const shouldCreateBeacon = (
-          waypoint.type === 'turn' || 
-          waypoint.type === 'turn_warning' ||
-          // index === 0 || // First waypoint
-          index === totalWaypoints - 1 || // Last waypoint
-          index % 10 === 0 // Every 10th waypoint
-        );
+		const lineMaterial = new THREE.LineBasicMaterial({ color: 0x0000ff });
+  
+  const points = [
+    new THREE.Vector3(0, 0, 0),
+    new THREE.Vector3(0, 1, 0)
+  ];
+  
+  const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
+  const line = new THREE.Line(lineGeometry, lineMaterial);
 
-        if (!shouldCreateBeacon) {
-          // Increase size and remove partial transparency for better visibility
-          const dotGeometry = new THREE.SphereGeometry(0.1, 16, 16);
-          const dotMaterial = new THREE.MeshStandardMaterial({ 
-            color: config.color,
-            transparent: true,
-            opacity: 1.0 // fully opaque
-          });
-          const dot = new THREE.Mesh(dotGeometry, dotMaterial);
-          dot.position.y = 0.1;
-          group.add(dot);
-        } else {
-          // Marker with cylinder + beacon sphere
-          const geometry = new THREE.CylinderGeometry(
-            0.1 * config.scale,
-            0.1 * config.scale,
-            config.height,
-            16
-          );
-          const material = new THREE.MeshStandardMaterial({ 
-            color: config.color,
-            transparent: true,
-            opacity: 0.8
-          });
-          const marker = new THREE.Mesh(geometry, material);
-          marker.position.y = config.height / 2;
-          group.add(marker);
 
-          // Add beacon
-          const beaconGeometry = new THREE.SphereGeometry(0.08 * config.scale, 16, 16);
-          const beaconMaterial = new THREE.MeshStandardMaterial({
-            color: 'white',
-            emissive: new THREE.Color(config.color),
-            emissiveIntensity: 0.8,
-            transparent: true,
-            opacity: 0.9
-          });
-          const beacon = new THREE.Mesh(beaconGeometry, beaconMaterial);
-          beacon.position.y = config.height + 0.1;
+  group.add(line);
 
-          // Animate only turns/warnings
-          if (waypoint.type === 'turn' || waypoint.type === 'turn_warning') {
-            const animate = () => {
-              if (beacon) {
-                beacon.position.y = config.height + 0.1 + Math.sin(Date.now() * 0.003) * 0.05;
-                requestAnimationFrame(animate);
-              }
-            };
-            animate();
-          }
-          group.add(beacon);
 
-          // Add distance text if available
-          if (waypoint.distanceToTurn) {
-            const distanceText = createTextSprite(`${Math.round(waypoint.distanceToTurn)}m`);
-            distanceText.position.set(0, config.height + 0.2, 0);
-            group.add(distanceText);
-          }
-        }
+  if (waypoint.distanceToTurn) {
+    const distanceText = createTextSprite(`${Math.round(waypoint.distanceToTurn)}m`);
+    distanceText.position.set(0, 1.2, 0);
+    group.add(distanceText);
+  }
 
-        if (position) {
-          group.position.set(position.x, 1, position.z);
-        }
 
-        return group;
-      } catch (error) {
-        log(`Error creating waypoint marker: ${error.message}`);
-        return null;
-      }
-    }
+  if (position) {
+    group.position.set(position.x, 0, position.z);
+  }
 
+  return group;
+}
+
+    
     async function initWaypoints() {
       const loadingElement = document.getElementById('loading');
       loadingElement.style.display = 'block';
