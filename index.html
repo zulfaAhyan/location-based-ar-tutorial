@@ -263,7 +263,8 @@
         });
 
         // Scale down for AR space
-        const scale = 0.1;
+        //const scale = 0.1;
+        const scale = 0.1; //scale for real world distance
         const markerPoints = positions.map((pos) => ({
           x: pos.x * scale,
           z: pos.z * scale
