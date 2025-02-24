@@ -277,7 +277,9 @@
         });
 
         // Scale for AR space (scale = 1 as requested)
-        const scale = 1;
+        //const scale = 1;
+
+        const scale = 0.01;
         const markerPoints = positions.map((pos) => ({
           x: pos.x * scale,
           z: pos.z * scale
