@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AR Navigation with Arrows</title>
   <script type="importmap">
     {
@@ -73,18 +73,14 @@
     // Scene setup
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
-    const renderer = new THREE.WebGLRenderer({
-      antialias: true,
-      alpha: true,
-      logarithmicDepthBuffer: true
-    });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.xr.enabled = true;
     document.body.appendChild(renderer.domElement);
 
-    // Debug logging
+    // Debugging display
     const debug = document.getElementById('debug');
     function log(message) {
       console.log(message);
@@ -92,246 +88,97 @@
       debug.style.display = 'block';
     }
 
-    // Enhanced lighting
-    const hemisphereLight = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
+    // Lighting setup
+    scene.add(new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1));
     const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
     directionalLight.position.set(0, 10, 0);
-    scene.add(hemisphereLight);
     scene.add(directionalLight);
 
-    // Create a custom arrow shape
-    function createArrowGeometry() {
-      const shape = new THREE.Shape();
-      
-      // Arrow body
-      shape.moveTo(0, -0.15);
-      shape.lineTo(0.4, -0.15);
-      shape.lineTo(0.4, -0.3);
-      shape.lineTo(0.8, 0);
-      shape.lineTo(0.4, 0.3);
-      shape.lineTo(0.4, 0.15);
-      shape.lineTo(0, 0.15);
-      shape.lineTo(0, -0.15);
-
-      const geometry = new THREE.ShapeGeometry(shape);
-      return geometry;
-    }
-
-    function createArrowMesh(color = 0x00ffff) {
-      const geometry = createArrowGeometry();
-      const material = new THREE.MeshStandardMaterial({
-        color: color,
-        side: THREE.DoubleSide,
-        transparent: true,
-        opacity: 0.8
-      });
-      
+    function createArrow() {
+      const geometry = new THREE.ConeGeometry(0.1, 0.3, 8);
+      const material = new THREE.MeshStandardMaterial({ color: 0x00ffff, transparent: true, opacity: 0.8 });
       const arrow = new THREE.Mesh(geometry, material);
-      // Rotate to lay flat
       arrow.rotation.x = -Math.PI / 2;
-      arrow.position.y = 0.05; // Slightly above ground
       return arrow;
     }
 
-    function createArrowsAlongPath(start, end, numArrows = 5) {
-      const arrows = new THREE.Group();
-      
-      const dx = end.x - start.x;
-      const dz = end.z - start.z;
-      const pathLength = Math.sqrt(dx * dx + dz * dz);
-      const spacing = pathLength / (numArrows + 1);
-      
-      // Calculate rotation angle for the arrows
-      const angle = Math.atan2(dz, dx);
-      
-      for (let i = 1; i <= numArrows; i++) {
-        const arrow = createArrowMesh();
-        
-        // Position along path
-        const t = i / (numArrows + 1);
-        arrow.position.x = start.x + dx * t;
-        arrow.position.z = start.z + dz * t;
-        
-        // Rotate to point in path direction
-        arrow.rotation.y = -angle;
-        
-        arrows.add(arrow);
-      }
-      
-      return arrows;
+    function calculateRelativePosition(lat1, lon1, lat2, lon2) {
+      const R = 6371000;
+      const φ1 = lat1 * Math.PI / 180, φ2 = lat2 * Math.PI / 180;
+      const Δφ = (lat2 - lat1) * Math.PI / 180;
+      const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+      const x = R * Δλ * Math.cos((φ1 + φ2) / 2);
+      const z = R * Δφ;
+      return { x, z };
     }
 
     async function loadWaypoints() {
       const routeId = new URLSearchParams(window.location.search).get('routeId');
       if (!routeId) {
-        log("Route ID not provided");
+        log("No route ID provided.");
         return [];
       }
       try {
-        const response = await fetch(https://waypoints-prht.onrender.com/get-waypoints/${routeId});
+        const response = await fetch(`https://waypoints-prht.onrender.com/get-waypoints/${routeId}`);
         const data = await response.json();
-        log(Loaded ${data.waypoints?.length || 0} waypoints from server);
+        log(`Loaded ${data.waypoints?.length || 0} waypoints`);
         return data.waypoints || [];
       } catch (error) {
-        log(Error fetching waypoints: ${error.message});
+        log(`Error fetching waypoints: ${error.message}`);
         return [];
       }
     }
 
-    function calculateDistance(lat1, lon1, lat2, lon2) {
-      const R = 6371000; // Earth's radius in meters
-      const φ1 = lat1 * Math.PI / 180;
-      const φ2 = lat2 * Math.PI / 180;
-      const Δφ = (lat2 - lat1) * Math.PI / 180;
-      const Δλ = (lon2 - lon1) * Math.PI / 180;
-
-      const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
-               Math.cos(φ1) * Math.cos(φ2) *
-               Math.sin(Δλ/2) * Math.sin(Δλ/2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-      
-      return R * c; // Distance in meters
-    }
-
-    function calculateRelativePosition(lat1, lon1, lat2, lon2) {
-      if (!lat1 || !lon1 || !lat2 || !lon2) {
-        log("Invalid coordinates provided");
-        return { x: 0, z: 0, distance: 0 };
-      }
-
-      const R = 6371000;
-      const φ1 = lat1 * Math.PI / 180;
-      const φ2 = lat2 * Math.PI / 180;
-      const Δφ = (lat2 - lat1) * Math.PI / 180;
-      const Δλ = (lon2 - lon1) * Math.PI / 180;
-
-      // z-direction from delta in latitude
-      const z = Math.sin(Δφ) * R;
-      // x-direction from delta in longitude
-      const x = Math.cos(φ1) * Math.sin(Δλ) * R;
-      const distance = calculateDistance(lat1, lon1, lat2, lon2);
-
-      return { x, z, distance };
-    }
-
     async function initWaypoints() {
-      const loadingElement = document.getElementById('loading');
-      loadingElement.style.display = 'block';
+      document.getElementById('loading').style.display = 'block';
       debug.textContent = '';
 
       try {
         const waypoints = await loadWaypoints();
-        if (!waypoints || waypoints.length === 0) {
-          throw new Error('No waypoints found');
-        }
+        if (!waypoints.length) throw new Error("No waypoints found");
 
-        log(Total waypoints from server: ${waypoints.length});
-        
-        // Filter waypoints
-        const filteredWaypoints = waypoints.filter((wp, index) => {
-          if (!wp.lat || !wp.lng) return false;
-          if (index === 0) return true; // keep first
-          if (index === waypoints.length - 1) return true; // keep last
+        const firstWaypoint = waypoints[0];
+        if (!firstWaypoint?.lat || !firstWaypoint?.lng) throw new Error("Invalid first waypoint");
 
-          const prevWp = waypoints[index - 1];
-          const distance = calculateDistance(
-            prevWp.lat, prevWp.lng,
-            wp.lat, wp.lng
-          );
+        const positions = waypoints.map(wp => calculateRelativePosition(firstWaypoint.lat, firstWaypoint.lng, wp.lat, wp.lng));
 
-          return distance > 0.5;
+        positions.forEach((pos, i) => {
+          if (i === positions.length - 1) return;
+          const arrow = createArrow();
+          arrow.position.set(pos.x * 0.1, 0, pos.z * 0.1);
+          scene.add(arrow);
         });
 
-        log(Filtered down to ${filteredWaypoints.length} waypoints);
-
-        // Compute positions relative to the first waypoint
-        const positions = [];
-        let firstWaypoint = null;
-        filteredWaypoints.forEach((wp, index) => {
-          if (wp && wp.lat && wp.lng) {
-            if (!firstWaypoint) {
-              firstWaypoint = wp;
-              positions.push({ x: 0, z: 0 });
-            } else {
-              const pos = calculateRelativePosition(
-                firstWaypoint.lat, firstWaypoint.lng,
-                wp.lat, wp.lng
-              );
-              positions.push(pos);
-            }
-          }
-        });
-
-        // Scale down for AR space
-        //const scale = 0.1;
-
-        const scale = 1;
-        const markerPoints = positions.map((pos) => ({
-          x: pos.x * scale,
-          z: pos.z * scale
-        }));
-
-        // Create arrows between waypoints
-        for (let i = 0; i < markerPoints.length - 1; i++) {
-          const start = markerPoints[i];
-          const end = markerPoints[i + 1];
-          
-          // Calculate distance to determine number of arrows
-          const distance = Math.sqrt(
-            Math.pow(end.x - start.x, 2) + 
-            Math.pow(end.z - start.z, 2)
-          );
-          
-          // Use more arrows for longer segments
-          const numArrows = Math.max(2, Math.floor(distance / 0.5));
-          
-          const arrows = createArrowsAlongPath(start, end, numArrows);
-          scene.add(arrows);
-        }
-
-        loadingElement.style.display = 'none';
-
+        document.getElementById('loading').style.display = 'none';
       } catch (error) {
-        log(Error in initWaypoints: ${error.message});
-        loadingElement.textContent = Error: ${error.message};
+        log(`Error initializing waypoints: ${error.message}`);
+        document.getElementById('loading').textContent = `Error: ${error.message}`;
       }
     }
 
     async function startAR() {
       try {
-        if (!('xr' in navigator)) {
-          throw new Error('WebXR not supported in this browser');
-        }
+        if (!('xr' in navigator)) throw new Error("WebXR not supported");
+        const supported = await navigator.xr.isSessionSupported('immersive-ar');
+        if (!supported) throw new Error("AR not supported on this device");
 
-        const isSupported = await navigator.xr.isSessionSupported('immersive-ar');
-        if (!isSupported) {
-          throw new Error('AR not supported on this device');
-        }
-
-        const arButton = ARButton.createButton(renderer, {
-          requiredFeatures: ['hit-test'],
-          optionalFeatures: ['dom-overlay'],
-          domOverlay: { root: document.body }
-        });
+        const arButton = ARButton.createButton(renderer, { requiredFeatures: ['hit-test'], optionalFeatures: ['dom-overlay'], domOverlay: { root: document.body } });
         document.body.appendChild(arButton);
 
-        renderer.setAnimationLoop(() => {
-          renderer.render(scene, camera);
-        });
+        renderer.setAnimationLoop(() => renderer.render(scene, camera));
       } catch (error) {
-        log(AR Error: ${error.message});
-        alert(AR Error: ${error.message});
+        log(`AR Error: ${error.message}`);
+        alert(`AR Error: ${error.message}`);
       }
     }
 
-    // Event listeners
     document.getElementById("enter-ar").addEventListener("click", async () => {
       await startAR();
       await initWaypoints();
       document.getElementById("enter-ar").style.display = "none";
     });
 
-    // Handle window resize
     window.addEventListener("resize", () => {
       if (!renderer.xr.isPresenting) {
         camera.aspect = window.innerWidth / window.innerHeight;
