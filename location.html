@@ -116,16 +116,18 @@
             height: 60%;
             z-index: 5;
             pointer-events: none;
+            perspective: 1000px;
         }
 
         .ar-arrow {
             position: absolute;
             top: 50%;
             left: 50%;
-            transform: translate(-50%, -50%);
+            transform-origin: center;
+            transform-style: preserve-3d;
             width: 60px;
             height: 60px;
-            transition: transform 0.3s ease-out;
+            transition: transform 0.2s ease-out;
         }
 
         .ar-arrow-head {
@@ -135,21 +137,14 @@
             border-right: 20px solid transparent;
             border-bottom: 40px solid rgba(33, 150, 243, 0.9);
             position: absolute;
-            top: 0;
             left: 50%;
-            transform: translateX(-50%);
-            animation: float 2s infinite ease-in-out;
-            transition: border-bottom-color 0.3s ease;
+            transform: translateX(-50%) rotateX(60deg);
+            transform-origin: center;
+            transition: border-bottom-color 0. 3s ease;
         }
 
         .wrong-direction .ar-arrow-head {
             border-bottom-color: rgba(255, 0, 0, 0.9);
-        }
-
-        @keyframes float {
-            0% { transform: translateX(-50%) translateY(0); }
-            50% { transform: translateX(-50%) translateY(-10px); }
-            100% { transform: translateX(-50%) translateY(0); }
         }
 
         .status-indicator {
@@ -161,6 +156,18 @@
             padding: 5px 10px;
             border-radius: 4px;
             font-size: 12px;
+            z-index: 1000;
+        }
+
+        .debug-info {
+            position: fixed;
+            bottom: 45%;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 5px;
+            border-radius: 4px;
+            font-size: 10px;
             z-index: 1000;
         }
     </style>
@@ -196,6 +203,7 @@
     <div id="direction-panel" class="direction-indicator"></div>
     <div id="instruction-panel" class="instruction-panel"></div>
     <div id="status-indicator" class="status-indicator"></div>
+    <div id="debug-info" class="debug-info"></div>
 
     <script>
         // Global variables
@@ -204,11 +212,10 @@
         let userLocation = null;
         let currentRouteIndex = 0;
         let deviceCompassHeading = null;
-        let previousBearing = 0;
-        let watchId = null;
         let isNavigating = false;
-        let currentInstruction = '';
-        let isWrongDirection = false;
+        let watchId = null;
+        let lastUpdateTime = 0;
+        const UPDATE_INTERVAL = 100; // Minimum time between updates in ms
 
         // Initialize application
         document.addEventListener('DOMContentLoaded', async () => {
@@ -319,6 +326,43 @@
             }).addTo(map);
         }
 
+        // Device orientation handling
+        function initializeDeviceOrientation() {
+            if (window.DeviceOrientationEvent) {
+                window.addEventListener('deviceorientation', handleDeviceOrientation, true);
+            } else {
+                updateStatusIndicator('Device orientation not supported');
+            }
+        }
+
+        function handleDeviceOrientation(event) {
+            const currentTime = Date.now();
+            if (currentTime - lastUpdateTime < UPDATE_INTERVAL) {
+                return; // Skip update if too soon
+            }
+            lastUpdateTime = currentTime;
+
+            if (event.webkitCompassHeading !== undefined) {
+                // iOS devices - already in degrees clockwise from north
+                deviceCompassHeading = event.webkitCompassHeading;
+            } else if (event.alpha !== null) {
+                // Android devices - convert from counter-clockwise to clockwise
+                deviceCompassHeading = (360 - event.alpha) % 360;
+                
+                // Apply screen orientation correction
+                const screenOrientation = (screen.orientation || {}).angle || window.orientation || 0;
+                deviceCompassHeading = (deviceCompassHeading + screenOrientation) % 360;
+            }
+
+            // Update debug info
+            document.getElementById('debug-info').textContent = 
+                `Heading: ${deviceCompassHeading.toFixed(1)}°`;
+
+            if (isNavigating) {
+                updateNavigation();
+            }
+        }
+
         // Navigation functions
         async function startNavigation() {
             const destination = document.getElementById('destination').value;
@@ -394,14 +438,12 @@
                         lineOptions: {
                             styles: [{ color: '#2196F3', weight: 6 }]
                         },
-                        show: false // Don't show routing narrative
+                        show: false
                     }).addTo(map);
 
                     routingControl.on('routesfound', (event) => {
                         if (event && event.routes && event.routes.length > 0) {
                             handleRouteFound(event);
-                            isNavigating = true;
-                            updateStatusIndicator('Navigation started');
                             resolve(event);
                         } else {
                             reject(new Error('No route found'));
@@ -412,8 +454,7 @@
                         console.error('Routing error:', err);
                         reject(new Error('Route calculation failed'));
                     });
-
-                } catch (error) {
+} catch (error) {
                     console.error('Route creation error:', error);
                     reject(error);
                 }
@@ -444,50 +485,64 @@
         function updateNavigation() {
             if (!routePoints.length || !userLocation) return;
 
-            if (currentRouteIndex < routePoints.length - 1) {
-                const nextPointCoords = routePoints[currentRouteIndex];
-                const distanceToNext = calculateDistance(
-                    userLocation,
-                    [nextPointCoords.lat, nextPointCoords.lng]
-                );
+            try {
+                // Find the next waypoint
+                if (currentRouteIndex < routePoints.length - 1) {
+                    const nextPointCoords = routePoints[currentRouteIndex];
+                    const distanceToNext = calculateDistance(
+                        userLocation,
+                        [nextPointCoords.lat, nextPointCoords.lng]
+                    );
 
-                if (distanceToNext < 10) {
-                    currentRouteIndex++;
-                    updateStatusIndicator('Reached waypoint - Moving to next');
+                    // Progress to next waypoint if close enough
+                    if (distanceToNext < 10) {
+                        currentRouteIndex++;
+                        updateStatusIndicator('Reached waypoint - Moving to next');
+                    }
                 }
+
+                const nextPoint = routePoints[currentRouteIndex];
+                if (!nextPoint) return;
+
+                updateARElements(nextPoint);
+                updateDirectionPanel(nextPoint);
+                updateInstructionPanel(nextPoint);
+
+            } catch (error) {
+                console.error('Navigation update error:', error);
+                updateStatusIndicator('Navigation update error');
             }
-
-            const nextPoint = routePoints[currentRouteIndex];
-            if (!nextPoint) return;
-
-            updateARElements(nextPoint);
-            updateDirectionPanel(nextPoint);
-            updateInstructionPanel(nextPoint);
         }
 
         function updateARElements(nextPoint) {
+            if (!deviceCompassHeading) return;
+
             const bearing = calculateBearing(
                 userLocation[0], userLocation[1],
                 nextPoint.lat, nextPoint.lng
             );
 
             const arrow = document.getElementById('navigation-arrow');
-            const userHeading = deviceCompassHeading || 0;
-            const rotation = bearing - userHeading;
             
-            // Calculate if user is facing wrong direction
-            const bearingDiff = Math.abs(((bearing - userHeading + 180) % 360) - 180);
-            isWrongDirection = bearingDiff > 90;
+            // Calculate relative bearing (difference between heading and bearing)
+            let relativeBearing = (bearing - deviceCompassHeading + 360) % 360;
+            
+            // Update arrow rotation and perspective
+            arrow.style.transform = `
+                translate(-50%, -50%) 
+                rotateZ(${relativeBearing}deg)
+            `;
 
+            // Update wrong direction status
+            const bearingDiff = Math.abs(((relativeBearing + 180) % 360) - 180);
+            const isWrongDirection = bearingDiff > 90;
+            
             // Update arrow appearance
             arrow.classList.toggle('wrong-direction', isWrongDirection);
-            
-            // Smooth rotation
-            const diff = ((rotation - previousBearing + 180) % 360) - 180;
-            const smoothRotation = previousBearing + diff * 0.1;
-            
-            arrow.style.transform = `translate(-50%, -50%) rotate(${smoothRotation}deg)`;
-            previousBearing = smoothRotation;
+
+            // Update debug info
+            document.getElementById('debug-info').textContent += 
+                ` | Bearing: ${bearing.toFixed(1)}° | Relative: ${relativeBearing.toFixed(1)}°`;
         }
 
         function updateDirectionPanel(nextPoint) {
@@ -520,12 +575,17 @@
         }
 
         function updateInstructionPanel(nextPoint) {
+            if (!deviceCompassHeading) return;
+
             const bearing = calculateBearing(
                 userLocation[0], userLocation[1],
                 nextPoint.lat, nextPoint.lng
             );
-            const distance = calculateDistance(userLocation, [nextPoint.lat, nextPoint.lng]);
-            const relativeBearing = ((bearing - (deviceCompassHeading || 0) + 360) % 360);
+            const distance = calculateDistance(
+                userLocation,
+                [nextPoint.lat, nextPoint.lng]
+            );
+            const relativeBearing = ((bearing - deviceCompassHeading + 360) % 360);
             
             let instruction = '';
             let icon = '';
@@ -533,7 +593,7 @@
             if (distance < 20) {
                 instruction = 'Destination ahead';
                 icon = '🏁';
-            } else if (isWrongDirection) {
+            } else if (Math.abs(((relativeBearing + 180) % 360) - 180) > 90) {
                 instruction = 'Wrong direction - Turn around';
                 icon = '⚠️';
             } else if (relativeBearing > 330 || relativeBearing < 30) {
@@ -553,74 +613,37 @@
 
         function calculateDistance(point1, point2) {
             const R = 6371e3; // Earth's radius in meters
-            const φ1 = point1[0] * Math.PI / 180; // Convert latitude to radians
-            const φ2 = point2[0] * Math.PI / 180; // Convert latitude to radians
-            const Δφ = (point2[0] - point1[0]) * Math.PI / 180; // Difference in latitude
-            const Δλ = (point2[1] - point1[1]) * Math.PI / 180; // Difference in longitude
-        
+            const φ1 = point1[0] * Math.PI / 180;
+            const φ2 = point2[0] * Math.PI / 180;
+            const Δφ = (point2[0] - point1[0]) * Math.PI / 180;
+            const Δλ = (point2[1] - point1[1]) * Math.PI / 180;
+
             const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-                      Math.cos(φ1) * Math.cos(φ2) *
-                      Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-        
+                     Math.cos(φ1) * Math.cos(φ2) *
+                     Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+
             const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-            const distance = R * c;
-        
-            return distance; // Distance in meters
+            return R * c; // Distance in meters
         }
 
         function calculateBearing(lat1, lon1, lat2, lon2) {
-            const φ1 = lat1 * Math.PI/180;
-            const φ2 = lat2 * Math.PI/180;
-            const Δλ = (lon2-lon1) * Math.PI/180;
+            // Convert to radians
+            const φ1 = lat1 * Math.PI / 180;
+            const φ2 = lat2 * Math.PI / 180;
+            const λ1 = lon1 * Math.PI / 180;
+            const λ2 = lon2 * Math.PI / 180;
 
+            // Calculate differences
+            const Δλ = λ2 - λ1;
+
+            // Calculate bearing
             const y = Math.sin(Δλ) * Math.cos(φ2);
             const x = Math.cos(φ1) * Math.sin(φ2) -
                      Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
 
-            return (Math.atan2(y, x) * 180/Math.PI + 360) % 360;
-        }
-
-        // Device orientation handling
-        function initializeDeviceOrientation() {
-            if (window.DeviceOrientationEvent) {
-                if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-                    // iOS 13+ devices
-                    DeviceOrientationEvent.requestPermission()
-                        .then(permission => {
-                            if (permission === 'granted') {
-                                window.addEventListener('deviceorientation', handleDeviceOrientation, true);
-                            }
-                        })
-                        .catch(console.error);
-                } else {
-                    // Non iOS 13+ devices
-                    window.addEventListener('deviceorientation', handleDeviceOrientation, true);
-                }
-            } else {
-                updateStatusIndicator('Device orientation not supported');
-            }
-        }
-
-        function handleDeviceOrientation(event) {
-            const previousHeading = deviceCompassHeading;
-            // Handle different device orientations
-            if (event.webkitCompassHeading !== undefined) {
-                // iOS devices
-                deviceCompassHeading = event.webkitCompassHeading;
-            } else if (event.alpha !== null) {
-                // Android devices
-                deviceCompassHeading = 360 - event.alpha;
-            }
-
-            // Smooth compass transitions
-            if (previousHeading !== null) {
-                const headingDiff = ((deviceCompassHeading - previousHeading + 180) % 360) - 180;
-                deviceCompassHeading = previousHeading + headingDiff * 0.3;
-            }
-
-            if (isNavigating) {
-                updateNavigation();
-            }
+            // Convert to degrees and normalize to 0-360
+            let bearing = Math.atan2(y, x) * 180 / Math.PI;
+            return (bearing + 360) % 360;
         }
 
         function updateStatusIndicator(message) {
@@ -629,21 +652,7 @@
             console.log('Status:', message);
         }
 
-        // Handle page visibility changes
-        document.addEventListener('visibilitychange', () => {
-            if (document.hidden) {
-                // Pause updates when page is hidden
-                if (watchId) {
-                    navigator.geolocation.clearWatch(watchId);
-                    watchId = null;
-                }
-            } else {
-                // Resume updates when page is visible again
-                startLocationTracking();
-            }
-        });
-
-        // Clean up on page unload
+        // Event Listeners for cleanup
         window.addEventListener('beforeunload', () => {
             if (watchId) {
                 navigator.geolocation.clearWatch(watchId);
@@ -651,18 +660,14 @@
             window.removeEventListener('deviceorientation', handleDeviceOrientation, true);
         });
 
-        // iOS specific touch event handler for permission
-        document.addEventListener('touchstart', () => {
-            if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-                DeviceOrientationEvent.requestPermission()
-                    .then(permission => {
-                        if (permission === 'granted') {
-                            initializeDeviceOrientation();
-                        }
-                    })
-                    .catch(console.error);
-            }
-        }, { once: true });
+        // Handle screen orientation changes
+        window.addEventListener('orientationchange', () => {
+            setTimeout(() => {
+                if (deviceCompassHeading !== null) {
+                    updateNavigation();
+                }
+            }, 100);
+        });
 
         // Error handling
         window.addEventListener('error', function(event) {
@@ -672,4 +677,3 @@
     </script>
 </body>
 </html>
-
