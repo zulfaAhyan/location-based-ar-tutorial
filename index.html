@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1.0">
-  <title>AR Navigation with Correct Directions</title>
+  <title>AR Navigation with Arrows</title>
   <script type="importmap">
     {
       "imports": {
@@ -127,34 +127,22 @@
       });
       
       const arrow = new THREE.Mesh(geometry, material);
-      // Rotate to lay flat and point forward by default
+      // Rotate to lay flat
       arrow.rotation.x = -Math.PI / 2;
-      arrow.rotation.z = Math.PI; // Make arrow point forward by default
       arrow.position.y = 0.05; // Slightly above ground
       return arrow;
     }
 
-    function calculateBearing(lat1, lon1, lat2, lon2) {
-      const φ1 = lat1 * Math.PI / 180;
-      const φ2 = lat2 * Math.PI / 180;
-      const Δλ = (lon2 - lon1) * Math.PI / 180;
-
-      const y = Math.sin(Δλ) * Math.cos(φ2);
-      const x = Math.cos(φ1) * Math.sin(φ2) -
-                Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
-      
-      return Math.atan2(y, x);
-    }
-
-    function createArrowsAlongPath(start, end, startLat, startLon, endLat, endLon, numArrows = 5) {
+    function createArrowsAlongPath(start, end, numArrows = 5) {
       const arrows = new THREE.Group();
       
       const dx = end.x - start.x;
       const dz = end.z - start.z;
       const pathLength = Math.sqrt(dx * dx + dz * dz);
+      const spacing = pathLength / (numArrows + 1);
       
-      // Calculate true bearing between points
-      const bearing = calculateBearing(startLat, startLon, endLat, endLon);
+      // Calculate rotation angle for the arrows
+      const angle = Math.atan2(dz, dx);
       
       for (let i = 1; i <= numArrows; i++) {
         const arrow = createArrowMesh();
@@ -164,8 +152,8 @@
         arrow.position.x = start.x + dx * t;
         arrow.position.z = start.z + dz * t;
         
-        // Apply bearing as rotation
-        arrow.rotation.y = -bearing;
+        // Rotate to point in path direction
+        arrow.rotation.y = -angle;
         
         arrows.add(arrow);
       }
@@ -180,12 +168,12 @@
         return [];
       }
       try {
-        const response = await fetch(`https://waypoints-prht.onrender.com/get-waypoints/${routeId}`);
+        const response = await fetch(https://waypoints-prht.onrender.com/get-waypoints/${routeId});
         const data = await response.json();
-        log(`Loaded ${data.waypoints?.length || 0} waypoints from server`);
+        log(Loaded ${data.waypoints?.length || 0} waypoints from server);
         return data.waypoints || [];
       } catch (error) {
-        log(`Error fetching waypoints: ${error.message}`);
+        log(Error fetching waypoints: ${error.message});
         return [];
       }
     }
@@ -217,12 +205,10 @@
       const Δφ = (lat2 - lat1) * Math.PI / 180;
       const Δλ = (lon2 - lon1) * Math.PI / 180;
 
-      // Calculate north-south distance (z-axis)
-      const z = -Math.sin(Δφ) * R; // Negative to match Three.js coordinate system
-      
-      // Calculate east-west distance (x-axis)
+      // z-direction from delta in latitude
+      const z = Math.sin(Δφ) * R;
+      // x-direction from delta in longitude
       const x = Math.cos(φ1) * Math.sin(Δλ) * R;
-      
       const distance = calculateDistance(lat1, lon1, lat2, lon2);
 
       return { x, z, distance };
@@ -239,13 +225,13 @@
           throw new Error('No waypoints found');
         }
 
-        log(`Total waypoints from server: ${waypoints.length}`);
+        log(Total waypoints from server: ${waypoints.length});
         
         // Filter waypoints
         const filteredWaypoints = waypoints.filter((wp, index) => {
           if (!wp.lat || !wp.lng) return false;
-          if (index === 0) return true;
-          if (index === waypoints.length - 1) return true;
+          if (index === 0) return true; // keep first
+          if (index === waypoints.length - 1) return true; // keep last
 
           const prevWp = waypoints[index - 1];
           const distance = calculateDistance(
@@ -256,7 +242,7 @@
           return distance > 0.5;
         });
 
-        log(`Filtered down to ${filteredWaypoints.length} waypoints`);
+        log(Filtered down to ${filteredWaypoints.length} waypoints);
 
         // Compute positions relative to the first waypoint
         const positions = [];
@@ -276,23 +262,18 @@
           }
         });
 
-        // Scale for AR space (scale = 1 as requested)
-        //const scale = 1;
-
-        const scale = 0.01;
+        // Scale down for AR space
+        //const scale = 0.1;
+        const scale = 0.1; //scale for real world distance
         const markerPoints = positions.map((pos) => ({
           x: pos.x * scale,
           z: pos.z * scale
         }));
 
-        // Create arrows between waypoints with correct orientation
+        // Create arrows between waypoints
         for (let i = 0; i < markerPoints.length - 1; i++) {
           const start = markerPoints[i];
           const end = markerPoints[i + 1];
-          
-          // Get the original waypoints for bearing calculation
-          const startWp = filteredWaypoints[i];
-          const endWp = filteredWaypoints[i + 1];
           
           // Calculate distance to determine number of arrows
           const distance = Math.sqrt(
@@ -303,25 +284,15 @@
           // Use more arrows for longer segments
           const numArrows = Math.max(2, Math.floor(distance / 0.5));
           
-          const arrows = createArrowsAlongPath(
-            start, 
-            end, 
-            startWp.lat, 
-            startWp.lng, 
-            endWp.lat, 
-            endWp.lng,
-            numArrows
-          );
+          const arrows = createArrowsAlongPath(start, end, numArrows);
           scene.add(arrows);
-          
-          log(`Created arrows for segment ${i} with bearing calculation`);
         }
 
         loadingElement.style.display = 'none';
 
       } catch (error) {
-        log(`Error in initWaypoints: ${error.message}`);
-        loadingElement.textContent = `Error: ${error.message}`;
+        log(Error in initWaypoints: ${error.message});
+        loadingElement.textContent = Error: ${error.message};
       }
     }
 
@@ -347,8 +318,8 @@
           renderer.render(scene, camera);
         });
       } catch (error) {
-        log(`AR Error: ${error.message}`);
-        alert(`AR Error: ${error.message}`);
+        log(AR Error: ${error.message});
+        alert(AR Error: ${error.message});
       }
     }
 
