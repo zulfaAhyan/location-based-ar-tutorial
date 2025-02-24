@@ -100,7 +100,7 @@
             border-bottom: 40px solid rgba(33, 150, 243, 0.9);
             position: absolute;
             left: 50%;
-            transform: translateX(-50%);
+            transform: translateX(-50%) rotateX(60deg);
         }
 
         .debug-info {
@@ -235,13 +235,21 @@
                 // iOS devices
                 deviceCompassHeading = event.webkitCompassHeading;
             } else if (event.alpha !== null) {
-                // Android devices
-                deviceCompassHeading = 360 - event.alpha;
+                // Android devices - use alpha directly
+                deviceCompassHeading = event.alpha;
                 
-                // Apply screen orientation correction
+                // Apply screen orientation correction if needed
                 const screenOrientation = (screen.orientation || {}).angle || window.orientation || 0;
-                deviceCompassHeading = (deviceCompassHeading + screenOrientation) % 360;
+                if (screenOrientation !== 0) {
+                    deviceCompassHeading = (deviceCompassHeading + screenOrientation) % 360;
+                }
             }
+
+            // Debug information
+            document.getElementById('debug-info').textContent = 
+                `Alpha: ${event.alpha?.toFixed(1)}° | ` +
+                `Compass: ${deviceCompassHeading?.toFixed(1)}° | ` +
+                `Screen: ${(screen.orientation || {}).angle || window.orientation || 0}°`;
 
             if (isNavigating) {
                 updateNavigation();
@@ -290,7 +298,6 @@
             currentRouteIndex = 0;
             isNavigating = true;
             
-            // Fit map to route bounds
             const bounds = L.latLngBounds(routePoints);
             map.fitBounds(bounds, { padding: [50, 50] });
             
@@ -300,7 +307,6 @@
         function updateNavigation() {
             if (!routePoints.length || !userLocation || deviceCompassHeading === null) return;
 
-            // Get current path segment
             const currentPoint = routePoints[currentRouteIndex];
             const nextPoint = routePoints[currentRouteIndex + 1];
             
@@ -312,13 +318,10 @@
                 nextPoint.lat, nextPoint.lng
             );
 
-            // Normalize compass heading
-            const normalizedCompassHeading = (deviceCompassHeading + 360) % 360;
-
-            // Calculate relative bearing
-            let relativeBearing = (pathBearing - normalizedCompassHeading + 360) % 360;
+            // Calculate relative bearing based on device heading
+            let relativeBearing = (pathBearing - deviceCompassHeading + 360) % 360;
             
-            // Normalize to -180 to +180
+            // Normalize to -180 to +180 range
             if (relativeBearing > 180) {
                 relativeBearing -= 360;
             }
@@ -328,12 +331,11 @@
             arrow.style.transform = `translate(-50%, -50%) rotate(${relativeBearing}deg)`;
 
             // Update debug info
-            document.getElementById('debug-info').textContent = 
-                `Path: ${Math.round(pathBearing)}° | ` +
-                `Device: ${Math.round(normalizedCompassHeading)}° | ` +
+            document.getElementById('debug-info').textContent += 
+                ` | Path: ${Math.round(pathBearing)}° | ` +
                 `Relative: ${Math.round(relativeBearing)}°`;
 
-            // Check if we should move to next waypoint
+            // Check distance to next waypoint
             const distToNext = calculateDistance(
                 userLocation[0], userLocation[1],
                 nextPoint.lat, nextPoint.lng
