@@ -168,12 +168,22 @@
 
         const positions = waypoints.map(wp => calculateRelativePosition(firstWaypoint.lat, firstWaypoint.lng, wp.lat, wp.lng));
 
+        // Log positions for debugging
+        log("Waypoint Positions:");
+        positions.forEach((pos, i) => {
+          log(`Waypoint ${i}: x=${pos.x.toFixed(2)}, z=${pos.z.toFixed(2)}`);
+        });
+
         // Add arrows to the scene
         for (let i = 0; i < positions.length; i++) {
           const waypoint = waypoints[i];
           const position = new THREE.Vector3(positions[i].x, 0, positions[i].z);
           const arrow = createArrow(position, waypoint.heading, waypoint.type);
           scene.add(arrow);
+
+          // Add axes helper for debugging
+          const axesHelper = new THREE.AxesHelper(1);
+          arrow.add(axesHelper);
         }
 
         document.getElementById('loading').style.display = 'none';
