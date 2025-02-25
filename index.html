@@ -95,7 +95,7 @@
         scene.add(directionalLight);
 
         function createArrow() {
-            const geometry = new THREE.ConeGeometry(0.2, 0.6, 8); // Increased arrow size
+            const geometry = new THREE.ConeGeometry(0.2, 0.6, 8);
             const material = new THREE.MeshStandardMaterial({ color: 0x00ffff, transparent: true, opacity: 0.8 });
             const arrow = new THREE.Mesh(geometry, material);
             arrow.rotation.x = -Math.PI / 2;
@@ -143,7 +143,6 @@
 
                 const positions = waypoints.map(wp => calculateRelativePosition(firstWaypoint.lat, firstWaypoint.lng, wp.lat, wp.lng));
 
-                // Perform hit test for the first arrow
                 const hitTestResults = await renderer.xr.getSession().requestHitTest(new THREE.Vector2(0, 0), renderer.xr.getSession().frameOfReference);
 
                 if (hitTestResults.length > 0) {
@@ -155,8 +154,8 @@
                     positions.forEach((pos, i) => {
                         if (i === positions.length - 1) return;
                         const arrow = createArrow();
-                        arrow.position.set(pos.x * 1, 0.2, pos.z * 1); // Adjusted scaling and y-position
-                        anchor.add(arrow); // add arrow to the anchor.
+                        arrow.position.set(pos.x * 1, 0.2, pos.z * 1);
+                        anchor.add(arrow);
                     });
 
                     document.getElementById('loading').style.display = 'none';
@@ -178,7 +177,16 @@
                 const arButton = ARButton.createButton(renderer, { requiredFeatures: ['hit-test'], optionalFeatures: ['dom-overlay'], domOverlay: { root: document.body } });
                 document.body.appendChild(arButton);
 
-                renderer.setAnimationLoop(() => renderer.render(scene, camera));
+                let waypointsInitialized = false;
+
+                renderer.setAnimationLoop(() => {
+                    renderer.render(scene, camera);
+                    if (renderer.xr.getSession() && !waypointsInitialized) {
+                        initWaypoints();
+                        waypointsInitialized = true;
+                    }
+                });
+
             } catch (error) {
                 log(`AR Error: ${error.message}`);
                 alert(`AR Error: ${error.message}`);
@@ -187,7 +195,6 @@
 
         document.getElementById("enter-ar").addEventListener("click", async () => {
             await startAR();
-            await initWaypoints();
             document.getElementById("enter-ar").style.display = "none";
         });
 
