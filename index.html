@@ -216,6 +216,8 @@
       };
     }
 
+
+    // Add this function to reverse the waypoints array
     async function loadWaypoints() {
       const routeId = new URLSearchParams(window.location.search).get('routeId');
       if (!routeId) {
@@ -225,8 +227,22 @@
       try {
         const response = await fetch(`https://waypoints-prht.onrender.com/get-waypoints/${routeId}`);
         const data = await response.json();
-        log(`Loaded ${data.waypoints?.length || 0} waypoints from server`);
-        return data.waypoints || [];
+        
+        // Check if waypoints exist
+        if (!data.waypoints || data.waypoints.length === 0) {
+          log("No waypoints returned from server");
+          return [];
+        }
+        
+        // Log the original waypoints order (for debugging)
+        log(`Loaded ${data.waypoints.length} waypoints from server`);
+        
+        // IMPORTANT: Reverse the waypoints array to fix the order
+        // This assumes the waypoints are currently in reverse order (destination first, origin last)
+        const correctedWaypoints = [...data.waypoints].reverse();
+        
+        log(`Reversed waypoint order to correct navigation direction`);
+        return correctedWaypoints;
       } catch (error) {
         log(`Error fetching waypoints: ${error.message}`);
         return [];
