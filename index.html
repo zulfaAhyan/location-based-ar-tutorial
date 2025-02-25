@@ -130,43 +130,39 @@
             }
         }
 
+
         async function initWaypoints() {
-            document.getElementById('loading').style.display = 'block';
-            debug.textContent = '';
+    document.getElementById('loading').style.display = 'block';
+    debug.textContent = '';
 
-            try {
-                const waypoints = await loadWaypoints();
-                if (!waypoints.length) throw new Error("No waypoints found");
+    try {
+        const waypoints = await loadWaypoints();
+        if (!waypoints.length) throw new Error("No waypoints found");
 
-                const firstWaypoint = waypoints[0];
-                if (!firstWaypoint?.lat || !firstWaypoint?.lng) throw new Error("Invalid first waypoint");
+        const firstWaypoint = waypoints[0];
+        if (!firstWaypoint?.lat || !firstWaypoint?.lng) throw new Error("Invalid first waypoint");
 
-                const positions = waypoints.map(wp => calculateRelativePosition(firstWaypoint.lat, firstWaypoint.lng, wp.lat, wp.lng));
+        const positions = waypoints.map(wp => calculateRelativePosition(firstWaypoint.lat, firstWaypoint.lng, wp.lat, wp.lng));
 
-                const hitTestResults = await renderer.xr.getSession().requestHitTest(new THREE.Vector2(0, 0), renderer.xr.getSession().frameOfReference);
+        const session = renderer.xr.getSession();
 
-                if (hitTestResults.length > 0) {
-                    const hit = hitTestResults[0];
-                    const hitPose = hit.getPose(renderer.xr.getSession().frameOfReference);
-                    const anchor = renderer.xr.getSession().createAnchor(hitPose);
-                    scene.add(anchor);
-
-                    positions.forEach((pos, i) => {
-                        if (i === positions.length - 1) return;
-                        const arrow = createArrow();
-                        arrow.position.set(pos.x * 1, 0.2, pos.z * 1);
-                        anchor.add(arrow);
-                    });
-
-                    document.getElementById('loading').style.display = 'none';
-                } else {
-                    throw new Error("Hit test failed.");
-                }
-            } catch (error) {
-                log(`Error initializing waypoints: ${error.message}`);
-                document.getElementById('loading').textContent = `Error: ${error.message}`;
-            }
+        if (!session.supportedFeatures.has('hit-test')) {
+            throw new Error("Hit test feature not supported by this session.");
         }
+
+        const hitTestResults = await session.requestHitTest(new THREE.Vector2(0, 0), session.frameOfReference);
+
+        if (hitTestResults.length > 0) {
+            // ... (rest of your hit test and anchor code) ...
+        } else {
+            throw new Error("Hit test failed.");
+        }
+    } catch (error) {
+        log(`Error initializing waypoints: ${error.message}`);
+        document.getElementById('loading').textContent = `Error: ${error.message}`;
+    }
+}
+        
 
         async function startAR() {
             try {
