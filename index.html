@@ -59,12 +59,26 @@
       word-wrap: break-word;
       display: none;
     }
+    #direction-indicator {
+      position: absolute;
+      bottom: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.7);
+      color: white;
+      padding: 15px;
+      border-radius: 25px;
+      font-size: 18px;
+      text-align: center;
+      display: none;
+    }
   </style>
 </head>
 <body>
   <button id="enter-ar">Enter AR</button>
   <div id="loading">Loading navigation...</div>
   <div id="debug"></div>
+  <div id="direction-indicator">↑ Follow the arrows</div>
 
   <script type="module">
     import * as THREE from 'three';
@@ -92,81 +106,92 @@
       debug.style.display = 'block';
     }
 
+    // Direction indicator
+    const directionIndicator = document.getElementById('direction-indicator');
+
     // Lighting setup
     scene.add(new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1));
     const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
     directionalLight.position.set(0, 10, 0);
     scene.add(directionalLight);
 
-    // Create a more prominent arrow
-    function createDirectionalArrow(color = 0x00ffff) {
-      // Create a group to hold our arrow elements
-      const arrowGroup = new THREE.Group();
+    // Create a more visible arrow for navigation
+    function createArrow(color = 0x00ffff) {
+      const arrow = new THREE.Group();
       
-      // Create arrow body using a rectangular prism
-      const bodyGeometry = new THREE.BoxGeometry(0.1, 0.03, 0.3);
-      const bodyMaterial = new THREE.MeshStandardMaterial({ 
-        color: color, 
-        transparent: true, 
-        opacity: 0.9,
+      // Create a cone for the arrowhead
+      const headGeometry = new THREE.ConeGeometry(0.1, 0.2, 16);
+      const headMaterial = new THREE.MeshStandardMaterial({
+        color: color,
         emissive: color,
-        emissiveIntensity: 0.3
-      });
-      const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
-      body.position.z = -0.05; // Shift backward slightly
-      
-      // Create arrowhead using a cone
-      const headGeometry = new THREE.ConeGeometry(0.07, 0.15, 8);
-      const headMaterial = new THREE.MeshStandardMaterial({ 
-        color: color, 
-        transparent: true, 
-        opacity: 0.9,
-        emissive: color,
-        emissiveIntensity: 0.5
+        emissiveIntensity: 0.5,
+        transparent: true,
+        opacity: 0.9
       });
       const head = new THREE.Mesh(headGeometry, headMaterial);
-      head.rotation.x = Math.PI / 2; // Point forward
-      head.position.z = 0.1; // Position at front of body
+      head.position.set(0, 0, -0.1); // Position at the front
+      head.rotation.x = Math.PI / 2; // Rotate to point forward
       
-      // Add both parts to the group
-      arrowGroup.add(body);
-      arrowGroup.add(head);
+      // Create a cylinder for the arrow body
+      const bodyGeometry = new THREE.CylinderGeometry(0.03, 0.03, 0.3, 12);
+      const bodyMaterial = new THREE.MeshStandardMaterial({
+        color: color,
+        emissive: color,
+        emissiveIntensity: 0.3,
+        transparent: true,
+        opacity: 0.9
+      });
+      const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+      body.position.set(0, 0, 0.05); // Position behind the head
+      body.rotation.x = Math.PI / 2; // Rotate to align with head
       
-      return arrowGroup;
+      arrow.add(head);
+      arrow.add(body);
+      arrow.userData.isNavObject = true;
+      
+      return arrow;
     }
-    
+
     // Create a destination marker
     function createDestinationMarker() {
       const group = new THREE.Group();
       
-      // Create base cylinder
-      const baseGeometry = new THREE.CylinderGeometry(0.15, 0.15, 0.02, 16);
-      const baseMaterial = new THREE.MeshStandardMaterial({ 
+      // Pin base
+      const baseGeometry = new THREE.CylinderGeometry(0.15, 0.15, 0.03, 24);
+      const baseMaterial = new THREE.MeshStandardMaterial({
         color: 0xff0000,
         emissive: 0xff0000,
         emissiveIntensity: 0.3
       });
       const base = new THREE.Mesh(baseGeometry, baseMaterial);
       
-      // Create pin
-      const pinGeometry = new THREE.ConeGeometry(0.1, 0.2, 16);
-      const pinMaterial = new THREE.MeshStandardMaterial({ 
+      // Pin top
+      const topGeometry = new THREE.ConeGeometry(0.12, 0.25, 24);
+      const topMaterial = new THREE.MeshStandardMaterial({
         color: 0xff0000,
         emissive: 0xff0000,
         emissiveIntensity: 0.5
       });
-      const pin = new THREE.Mesh(pinGeometry, pinMaterial);
-      pin.position.y = 0.12;
-      pin.rotation.x = Math.PI; // Point downward
+      const top = new THREE.Mesh(topGeometry, topMaterial);
+      top.position.y = 0.14;
+      top.rotation.x = Math.PI; // Point downward
       
       group.add(base);
-      group.add(pin);
-      group.position.y = 0.1; // Lift above ground
+      group.add(top);
+      group.userData.isNavObject = true;
+      group.userData.isDestination = true;
+      group.userData.pulsePhase = 0;
+      
+      // Add animation
+      group.userData.animate = function(delta) {
+        this.userData.pulsePhase += delta * 2;
+        const scale = 1 + 0.15 * Math.sin(this.userData.pulsePhase);
+        this.scale.set(scale, scale, scale);
+      };
       
       return group;
     }
-    
-    // Calculate distance between two GPS coordinates
+
     function calculateDistance(lat1, lon1, lat2, lon2) {
       const R = 6371000; // Earth's radius in meters
       const φ1 = lat1 * Math.PI / 180;
@@ -182,32 +207,37 @@
       return R * c; // Distance in meters
     }
 
+    // Calculate bearing between points
+    function calculateBearing(lat1, lon1, lat2, lon2) {
+      const φ1 = lat1 * Math.PI / 180;
+      const φ2 = lat2 * Math.PI / 180;
+      const λ1 = lon1 * Math.PI / 180;
+      const λ2 = lon2 * Math.PI / 180;
+
+      const y = Math.sin(λ2 - λ1) * Math.cos(φ2);
+      const x = Math.cos(φ1) * Math.sin(φ2) -
+                Math.sin(φ1) * Math.cos(φ2) * Math.cos(λ2 - λ1);
+      
+      let bearing = Math.atan2(y, x);
+      return bearing; // In radians
+    }
+
+    // Calculate positions using the Haversine formula for more accuracy
     function calculateRelativePosition(lat1, lon1, lat2, lon2) {
       if (!lat1 || !lon1 || !lat2 || !lon2) {
         log("Invalid coordinates provided");
         return { x: 0, z: 0, distance: 0, bearing: 0 };
       }
 
-      const R = 6371000; // Earth's radius in meters
-      const φ1 = lat1 * Math.PI / 180;
-      const φ2 = lat2 * Math.PI / 180;
-      const λ1 = lon1 * Math.PI / 180;
-      const λ2 = lon2 * Math.PI / 180;
-
-      // Calculate the bearing
-      const y = Math.sin(λ2 - λ1) * Math.cos(φ2);
-      const x = Math.cos(φ1) * Math.sin(φ2) - 
-                Math.sin(φ1) * Math.cos(φ2) * Math.cos(λ2 - λ1);
-      const bearing = Math.atan2(y, x);
-
-      // Calculate the distance
-      const a = Math.sin((φ2 - φ1) / 2) * Math.sin((φ2 - φ1) / 2) +
-                Math.cos(φ1) * Math.cos(φ2) * 
-                Math.sin((λ2 - λ1) / 2) * Math.sin((λ2 - λ1) / 2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      const distance = R * c;
-
-      // Convert to x,z coordinates (Three.js uses z for depth)
+      // Calculate bearing
+      const bearing = calculateBearing(lat1, lon1, lat2, lon2);
+      
+      // Calculate distance
+      const distance = calculateDistance(lat1, lon1, lat2, lon2);
+      
+      // Convert to x, z coordinates for THREE.js
+      // Note: In THREE.js, z is "forward" and x is "right"
+      // We need to adjust for that in our coordinate system
       return {
         x: distance * Math.sin(bearing),
         z: distance * Math.cos(bearing),
@@ -216,76 +246,36 @@
       };
     }
 
-
-async function loadWaypoints() {
-  const routeId = new URLSearchParams(window.location.search).get('routeId');
-  if (!routeId) {
-    log("No route ID provided.");
-    return [];
-  }
-  try {
-    const response = await fetch(`https://waypoints-prht.onrender.com/get-waypoints/${routeId}`);
-    const data = await response.json();
-    
-    if (!data.waypoints || data.waypoints.length === 0) {
-      log("No waypoints returned from server");
-      return [];
-    }
-    
-    let waypoints = data.waypoints;
-    log(`Loaded ${waypoints.length} waypoints from server`);
-    
-    // Get user's current position (if available)
-    if (navigator.geolocation) {
-      try {
-        const position = await new Promise((resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(resolve, reject, {
-            enableHighAccuracy: true,
-            timeout: 5000,
-            maximumAge: 0
-          });
-        });
-        
-        const userLat = position.coords.latitude;
-        const userLng = position.coords.longitude;
-        
-        // Calculate distance to first and last waypoint
-        const distToFirst = calculateDistance(
-          userLat, userLng,
-          waypoints[0].lat, waypoints[0].lng
-        );
-        
-        const distToLast = calculateDistance(
-          userLat, userLng,
-          waypoints[waypoints.length - 1].lat, waypoints[waypoints.length - 1].lng
-        );
-        
-        log(`Distance to first waypoint: ${distToFirst.toFixed(2)}m`);
-        log(`Distance to last waypoint: ${distToLast.toFixed(2)}m`);
-        
-        // If we're closer to the "last" waypoint than the "first" one,
-        // the waypoints are probably in the wrong order
-        if (distToLast < distToFirst) {
-          log("Detected reversed waypoint order - correcting");
-          waypoints = waypoints.reverse();
-        }
-      } catch (geoError) {
-        log(`Geolocation error: ${geoError.message}. Using default waypoint order.`);
-        // If we can't get location, just reverse anyway since we're pretty sure it's backwards
-        waypoints = waypoints.reverse();
+    async function loadWaypoints() {
+      const routeId = new URLSearchParams(window.location.search).get('routeId');
+      if (!routeId) {
+        log("No route ID provided.");
+        return [];
       }
-    } else {
-      log("Geolocation not available. Using default waypoint order.");
-      // If we can't get location, just reverse anyway since we're pretty sure it's backwards
-      waypoints = waypoints.reverse();
+      try {
+        const response = await fetch(`https://waypoints-prht.onrender.com/get-waypoints/${routeId}`);
+        const data = await response.json();
+        
+        // Check if waypoints exist
+        if (!data.waypoints || data.waypoints.length === 0) {
+          log("No waypoints returned from server");
+          return [];
+        }
+        
+        // Log the original waypoints order
+        log(`Loaded ${data.waypoints.length} waypoints from server`);
+        
+        // IMPORTANT: Reverse the waypoints array to fix the order
+        // This assumes the waypoints are currently in reverse order (destination first, origin last)
+        const correctedWaypoints = [...data.waypoints].reverse();
+        
+        log(`Reversed waypoint order to correct navigation direction`);
+        return correctedWaypoints;
+      } catch (error) {
+        log(`Error fetching waypoints: ${error.message}`);
+        return [];
+      }
     }
-    
-    return waypoints;
-  } catch (error) {
-    log(`Error fetching waypoints: ${error.message}`);
-    return [];
-  }
-}
 
     async function initWaypoints() {
       document.getElementById('loading').style.display = 'block';
@@ -354,21 +344,23 @@ async function loadWaypoints() {
         let scale = 1.0;
         if (maxDistance > 100) {
           // For long distances, use logarithmic scaling
-          scale = 50 / Math.log10(maxDistance);
+          scale = 30 / Math.log10(maxDistance);
         } else if (maxDistance < 20) {
           // For very short paths, keep scale close to 1
           scale = 0.8;
         } else {
           // For medium distances
-          scale = 20 / maxDistance;
+          scale = 10 / maxDistance;
         }
         
         log(`Using scale factor: ${scale.toFixed(4)} for max distance: ${maxDistance.toFixed(2)}m`);
 
-        // Apply scaling to all positions
+        // SWAP X AND Z: This is a critical fix for common AR orientation issues
+        // Many AR systems have different coordinate systems than expected
         const scaledPositions = positions.map((pos) => ({
-          x: pos.x * scale,
-          z: pos.z * scale,
+          // SWAP X AND Z! This can fix many AR orientation issues
+          z: pos.x * scale,
+          x: -pos.z * scale, // Negative for correct orientation in AR space
           bearing: pos.bearing
         }));
 
@@ -382,14 +374,14 @@ async function loadWaypoints() {
           const start = scaledPositions[i];
           const end = scaledPositions[i + 1];
           
-          // Calculate distance and direction
+          // Calculate distance and direction between points
           const dx = end.x - start.x;
           const dz = end.z - start.z;
           const segmentLength = Math.sqrt(dx * dx + dz * dz);
           const angle = Math.atan2(dx, dz);
           
           // Determine number of arrows based on segment length
-          const arrowSpacing = 0.5; // Space between arrows in AR units
+          const arrowSpacing = 0.4; // Space between arrows in AR units
           const numArrows = Math.max(1, Math.floor(segmentLength / arrowSpacing));
           
           for (let j = 0; j < numArrows; j++) {
@@ -398,10 +390,9 @@ async function loadWaypoints() {
             const arrowX = start.x + dx * t;
             const arrowZ = start.z + dz * t;
             
-            const arrow = createDirectionalArrow();
-            arrow.position.set(arrowX, 0.05, arrowZ);
-            arrow.rotation.y = -angle; // Orient to point in direction of travel
-            arrow.userData.isNavObject = true;
+            const arrow = createArrow();
+            arrow.position.set(arrowX, 0.1, arrowZ);
+            arrow.rotation.y = angle; // Orient to point in direction of travel
             
             scene.add(arrow);
           }
@@ -411,12 +402,17 @@ async function loadWaypoints() {
         if (scaledPositions.length > 0) {
           const destination = scaledPositions[scaledPositions.length - 1];
           const marker = createDestinationMarker();
-          marker.position.set(destination.x, 0, destination.z);
-          marker.userData.isNavObject = true;
+          marker.position.set(destination.x, 0.1, destination.z);
           scene.add(marker);
         }
 
         document.getElementById('loading').style.display = 'none';
+        directionIndicator.style.display = 'block';
+        
+        // Hide direction indicator after 5 seconds
+        setTimeout(() => {
+          directionIndicator.style.display = 'none';
+        }, 5000);
       } catch (error) {
         log(`Error initializing waypoints: ${error.message}`);
         document.getElementById('loading').textContent = `Error: ${error.message}`;
@@ -436,7 +432,14 @@ async function loadWaypoints() {
         });
         document.body.appendChild(arButton);
 
-        renderer.setAnimationLoop(() => {
+        renderer.setAnimationLoop((timestamp, frame) => {
+          // Animate destination marker if it exists
+          scene.traverse((object) => {
+            if (object.userData && object.userData.animate) {
+              object.userData.animate(0.016); // Approximate delta time
+            }
+          });
+          
           renderer.render(scene, camera);
         });
       } catch (error) {
