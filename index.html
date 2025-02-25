@@ -74,7 +74,7 @@
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    
+
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.xr.enabled = true;
@@ -94,16 +94,9 @@
     directionalLight.position.set(0, 10, 0);
     scene.add(directionalLight);
 
-    function createArrow() {
-      const geometry = new THREE.ConeGeometry(0.1, 0.3, 8);
-      const material = new THREE.MeshStandardMaterial({ color: 0x00ffff, transparent: true, opacity: 0.8 });
-      const arrow = new THREE.Mesh(geometry, material);
-      arrow.rotation.x = -Math.PI / 2;
-      return arrow;
-    }
-
+    // Function to calculate relative positions from latitude/longitude
     function calculateRelativePosition(lat1, lon1, lat2, lon2) {
-      const R = 6371000;
+      const R = 6371000; // Earth's radius in meters
       const φ1 = lat1 * Math.PI / 180, φ2 = lat2 * Math.PI / 180;
       const Δφ = (lat2 - lat1) * Math.PI / 180;
       const Δλ = (lon2 - lon1) * Math.PI / 180;
@@ -113,6 +106,37 @@
       return { x, z };
     }
 
+    // Function to create an arrow
+    function createArrow(position, heading, type) {
+      const geometry = new THREE.ConeGeometry(0.1, 0.3, 8);
+      let color;
+      switch (type) {
+        case 'turn_warning':
+          color = 0xffa500; // Orange
+          break;
+        case 'turn':
+          color = 0xff0000; // Red
+          break;
+        case 'destination_approach':
+          color = 0x00ff00; // Green
+          break;
+        case 'destination':
+          color = 0x0000ff; // Blue
+          break;
+        default:
+          color = 0x00ffff; // Cyan
+      }
+      const material = new THREE.MeshStandardMaterial({ color, transparent: true, opacity: 0.8 });
+      const arrow = new THREE.Mesh(geometry, material);
+
+      // Convert heading to radians and rotate the arrow
+      const angle = THREE.MathUtils.degToRad(heading);
+      arrow.rotation.y = angle;
+      arrow.position.copy(position);
+      return arrow;
+    }
+
+    // Function to load waypoints from the server
     async function loadWaypoints() {
       const routeId = new URLSearchParams(window.location.search).get('routeId');
       if (!routeId) {
@@ -130,6 +154,7 @@
       }
     }
 
+    // Function to initialize waypoints in the AR scene
     async function initWaypoints() {
       document.getElementById('loading').style.display = 'block';
       debug.textContent = '';
@@ -143,12 +168,13 @@
 
         const positions = waypoints.map(wp => calculateRelativePosition(firstWaypoint.lat, firstWaypoint.lng, wp.lat, wp.lng));
 
-        positions.forEach((pos, i) => {
-          if (i === positions.length - 1) return;
-          const arrow = createArrow();
-          arrow.position.set(pos.x * 0.1, 0, pos.z * 0.1);
+        // Add arrows to the scene
+        for (let i = 0; i < positions.length; i++) {
+          const waypoint = waypoints[i];
+          const position = new THREE.Vector3(positions[i].x, 0, positions[i].z);
+          const arrow = createArrow(position, waypoint.heading, waypoint.type);
           scene.add(arrow);
-        });
+        }
 
         document.getElementById('loading').style.display = 'none';
       } catch (error) {
@@ -157,6 +183,7 @@
       }
     }
 
+    // Function to start AR session
     async function startAR() {
       try {
         if (!('xr' in navigator)) throw new Error("WebXR not supported");
@@ -173,12 +200,14 @@
       }
     }
 
+    // Event listener for the "Enter AR" button
     document.getElementById("enter-ar").addEventListener("click", async () => {
       await startAR();
       await initWaypoints();
       document.getElementById("enter-ar").style.display = "none";
     });
 
+    // Handle window resize
     window.addEventListener("resize", () => {
       if (!renderer.xr.isPresenting) {
         camera.aspect = window.innerWidth / window.innerHeight;
