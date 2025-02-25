@@ -1,141 +1,140 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AR Navigation with Arrows</title>
-    <script type="importmap">
-        {
-            "imports": {
-                "three": "https://unpkg.com/three@0.155.0/build/three.module.js",
-                "three/addons/": "https://unpkg.com/three@0.155.0/examples/jsm/"
-            }
-        }
-    </script>
-    <style>
-        body {
-            margin: 0;
-            overflow: hidden;
-            font-family: Arial, sans-serif;
-        }
-        #enter-ar {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            z-index: 999;
-            padding: 12px 24px;
-            background: #007bff;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 16px;
-        }
-        #enter-ar:hover {
-            background: #0056b3;
-        }
-        #loading {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(0,0,0,0.8);
-            color: white;
-            padding: 20px;
-            border-radius: 8px;
-            display: none;
-            text-align: center;
-        }
-        #debug {
-            position: absolute;
-            bottom: 10px;
-            left: 10px;
-            background: rgba(0,0,0,0.7);
-            color: white;
-            padding: 10px;
-            font-size: 12px;
-            border-radius: 4px;
-            max-width: 80%;
-            word-wrap: break-word;
-            display: none;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AR Navigation with Arrows</title>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.155.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.155.0/examples/jsm/"
+      }
+    }
+  </script>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+    }
+    #enter-ar {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 999;
+      padding: 12px 24px;
+      background: #007bff;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    #enter-ar:hover {
+      background: #0056b3;
+    }
+    #loading {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0,0,0,0.8);
+      color: white;
+      padding: 20px;
+      border-radius: 8px;
+      display: none;
+      text-align: center;
+    }
+    #debug {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      background: rgba(0,0,0,0.7);
+      color: white;
+      padding: 10px;
+      font-size: 12px;
+      border-radius: 4px;
+      max-width: 80%;
+      word-wrap: break-word;
+      display: none;
+    }
+  </style>
 </head>
 <body>
-    <button id="enter-ar">Enter AR</button>
-    <div id="loading">Loading navigation...</div>
-    <div id="debug"></div>
+  <button id="enter-ar">Enter AR</button>
+  <div id="loading">Loading navigation...</div>
+  <div id="debug"></div>
 
-    <script type="module">
-        import * as THREE from 'three';
-        import { ARButton } from 'three/addons/webxr/ARButton.js';
+  <script type="module">
+    import * as THREE from 'three';
+    import { ARButton } from 'three/addons/webxr/ARButton.js';
 
-        // Scene setup
-        const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
-        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    // Scene setup
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.xr.enabled = true;
+    document.body.appendChild(renderer.domElement);
 
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(window.devicePixelRatio);
-        renderer.xr.enabled = true;
-        document.body.appendChild(renderer.domElement);
+    // Debugging display
+    const debug = document.getElementById('debug');
+    function log(message) {
+      console.log(message);
+      debug.textContent += message + '\n';
+      debug.style.display = 'block';
+    }
 
-        // Debugging display
-        const debug = document.getElementById('debug');
-        function log(message) {
-            console.log(message);
-            debug.textContent += message + '\n';
-            debug.style.display = 'block';
-        }
+    // Lighting setup
+    scene.add(new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1));
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    directionalLight.position.set(0, 10, 0);
+    scene.add(directionalLight);
 
-        // Lighting setup
-        scene.add(new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1));
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        directionalLight.position.set(0, 10, 0);
-        scene.add(directionalLight);
+    function createArrow() {
+      const geometry = new THREE.ConeGeometry(0.1, 0.3, 8);
+      const material = new THREE.MeshStandardMaterial({ color: 0x00ffff, transparent: true, opacity: 0.8 });
+      const arrow = new THREE.Mesh(geometry, material);
+      arrow.rotation.x = -Math.PI / 2;
+      return arrow;
+    }
 
-        function createArrow() {
-            const geometry = new THREE.ConeGeometry(0.2, 0.6, 8);
-            const material = new THREE.MeshStandardMaterial({ color: 0x00ffff, transparent: true, opacity: 0.8 });
-            const arrow = new THREE.Mesh(geometry, material);
-            arrow.rotation.x = -Math.PI / 2;
-            return arrow;
-        }
+    function calculateRelativePosition(lat1, lon1, lat2, lon2) {
+      const R = 6371000;
+      const φ1 = lat1 * Math.PI / 180, φ2 = lat2 * Math.PI / 180;
+      const Δφ = (lat2 - lat1) * Math.PI / 180;
+      const Δλ = (lon2 - lon1) * Math.PI / 180;
 
-        function calculateRelativePosition(lat1, lon1, lat2, lon2) {
-            const R = 6371000;
-            const φ1 = lat1 * Math.PI / 180, φ2 = lat2 * Math.PI / 180;
-            const Δφ = (lat2 - lat1) * Math.PI / 180;
-            const Δλ = (lon2 - lon1) * Math.PI / 180;
+      const x = R * Δλ * Math.cos((φ1 + φ2) / 2);
+      const z = R * Δφ;
+      return { x, z };
+    }
 
-            const x = R * Δλ * Math.cos((φ1 + φ2) / 2);
-            const z = R * Δφ;
-            return { x, z };
-        }
+    async function loadWaypoints() {
+      const routeId = new URLSearchParams(window.location.search).get('routeId');
+      if (!routeId) {
+        log("No route ID provided.");
+        return [];
+      }
+      try {
+        const response = await fetch(`https://waypoints-prht.onrender.com/get-waypoints/${routeId}`);
+        const data = await response.json();
+        log(`Loaded ${data.waypoints?.length || 0} waypoints`);
+        return data.waypoints || [];
+      } catch (error) {
+        log(`Error fetching waypoints: ${error.message}`);
+        return [];
+      }
+    }
 
-        async function loadWaypoints() {
-            const routeId = new URLSearchParams(window.location.search).get('routeId');
-            if (!routeId) {
-                log("No route ID provided.");
-                return [];
-            }
-            try {
-                const response = await fetch(`https://waypoints-prht.onrender.com/get-waypoints/${routeId}`);
-                const data = await response.json();
-                log(`Loaded ${data.waypoints?.length || 0} waypoints`);
-                return data.waypoints || [];
-            } catch (error) {
-                log(`Error fetching waypoints: ${error.message}`);
-                return [];
-            }
-        }
+    async function initWaypoints() {
+      document.getElementById('loading').style.display = 'block';
+      debug.textContent = '';
 
-
-        async function initWaypoints() {
-    document.getElementById('loading').style.display = 'block';
-    debug.textContent = '';
-
-    try {
+      try {
         const waypoints = await loadWaypoints();
         if (!waypoints.length) throw new Error("No waypoints found");
 
@@ -144,63 +143,49 @@
 
         const positions = waypoints.map(wp => calculateRelativePosition(firstWaypoint.lat, firstWaypoint.lng, wp.lat, wp.lng));
 
-        const session = renderer.xr.getSession();
+        positions.forEach((pos, i) => {
+          if (i === positions.length - 1) return;
+          const arrow = createArrow();
+          arrow.position.set(pos.x * 0.1, 0, pos.z * 0.1);
+          scene.add(arrow);
+        });
 
-        if (!session.supportedFeatures.has('hit-test')) {
-            throw new Error("Hit test feature not supported by this session.");
-        }
-
-        const hitTestResults = await session.requestHitTest(new THREE.Vector2(0, 0), session.frameOfReference);
-
-        if (hitTestResults.length > 0) {
-            // ... (rest of your hit test and anchor code) ...
-        } else {
-            throw new Error("Hit test failed.");
-        }
-    } catch (error) {
+        document.getElementById('loading').style.display = 'none';
+      } catch (error) {
         log(`Error initializing waypoints: ${error.message}`);
         document.getElementById('loading').textContent = `Error: ${error.message}`;
+      }
     }
-}
-        
 
-        async function startAR() {
-            try {
-                if (!('xr' in navigator)) throw new Error("WebXR not supported");
-                const supported = await navigator.xr.isSessionSupported('immersive-ar');
-                if (!supported) throw new Error("AR not supported on this device");
+    async function startAR() {
+      try {
+        if (!('xr' in navigator)) throw new Error("WebXR not supported");
+        const supported = await navigator.xr.isSessionSupported('immersive-ar');
+        if (!supported) throw new Error("AR not supported on this device");
 
-                const arButton = ARButton.createButton(renderer, { requiredFeatures: ['hit-test'], optionalFeatures: ['dom-overlay'], domOverlay: { root: document.body } });
-                document.body.appendChild(arButton);
+        const arButton = ARButton.createButton(renderer, { requiredFeatures: ['hit-test'], optionalFeatures: ['dom-overlay'], domOverlay: { root: document.body } });
+        document.body.appendChild(arButton);
 
-                let waypointsInitialized = false;
+        renderer.setAnimationLoop(() => renderer.render(scene, camera));
+      } catch (error) {
+        log(`AR Error: ${error.message}`);
+        alert(`AR Error: ${error.message}`);
+      }
+    }
 
-                renderer.setAnimationLoop(() => {
-                    renderer.render(scene, camera);
-                    if (renderer.xr.getSession() && !waypointsInitialized) {
-                        initWaypoints();
-                        waypointsInitialized = true;
-                    }
-                });
+    document.getElementById("enter-ar").addEventListener("click", async () => {
+      await startAR();
+      await initWaypoints();
+      document.getElementById("enter-ar").style.display = "none";
+    });
 
-            } catch (error) {
-                log(`AR Error: ${error.message}`);
-                alert(`AR Error: ${error.message}`);
-            }
-        }
-
-        document.getElementById("enter-ar").addEventListener("click", async () => {
-            await startAR();
-            document.getElementById("enter-ar").style.display = "none";
-        });
-
-        window.addEventListener("resize", () => {
-            if (!renderer.xr.isPresenting) {
-                camera.aspect = window.innerWidth / window.innerHeight;
-                camera.updateProjectionMatrix();
-                renderer.setSize(window.innerWidth, window.innerHeight);
-            }
-        });
-    </script>
+    window.addEventListener("resize", () => {
+      if (!renderer.xr.isPresenting) {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      }
+    });
+  </script>
 </body>
 </html>
