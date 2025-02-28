@@ -295,7 +295,7 @@
             const nextPos = positions[i + 1];
             const dx = nextPos.x - pos.x;
             const dz = nextPos.z - pos.z;
-            const angle = Math.atan2(dx, dz);
+            const angle = Math.atan2(dz, dx);
             arrow.rotation.y = -angle;
           }
           
