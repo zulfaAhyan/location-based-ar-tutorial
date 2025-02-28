@@ -296,7 +296,7 @@
             const dx = nextPos.x - pos.x;
             const dz = nextPos.z - pos.z;
             const angle = Math.atan2(dz, dx);
-            arrow.rotation.y = -angle;
+            arrow.rotation.y = angle;
           }
           
           scene.add(arrow);
