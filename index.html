@@ -70,6 +70,19 @@
       border-radius: 4px;
       display: none;
     }
+    #distance-info {
+      position: absolute;
+      bottom: 60px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.7);
+      color: white;
+      padding: 10px 15px;
+      font-size: 16px;
+      border-radius: 20px;
+      display: none;
+      text-align: center;
+    }
   </style>
 </head>
 <body>
@@ -77,6 +90,7 @@
   <div id="loading">Loading navigation...</div>
   <div id="debug"></div>
   <div id="orientation"></div>
+  <div id="distance-info"></div>
 
   <script type="module">
     import * as THREE from 'three';
@@ -95,6 +109,7 @@
     // Debug elements
     const debug = document.getElementById('debug');
     const orientationDisplay = document.getElementById('orientation');
+    const distanceInfo = document.getElementById('distance-info');
     
     function log(message) {
       console.log(message);
@@ -108,18 +123,18 @@
     directionalLight.position.set(0, 10, 0);
     scene.add(directionalLight);
 
-    // Create a chevron arrow for road overlay (similar to the image)
-    function createRoadArrow() {
+    // Create a triangular arrow similar to the image
+    function createDirectionalArrow() {
+      // Create a triangular shape
       const shape = new THREE.Shape();
-      // Create a chevron/triangle pointing forward
-      shape.moveTo(-0.5, -0.5);  // Bottom left
-      shape.lineTo(0, 0.5);      // Top middle
-      shape.lineTo(0.5, -0.5);   // Bottom right
-      shape.lineTo(-0.5, -0.5);  // Close shape
+      shape.moveTo(0, 0.5);      // Top point
+      shape.lineTo(-0.3, -0.5);  // Bottom left
+      shape.lineTo(0.3, -0.5);   // Bottom right
+      shape.lineTo(0, 0.5);      // Close shape
       
       const geometry = new THREE.ShapeGeometry(shape);
       const material = new THREE.MeshStandardMaterial({ 
-        color: 0xffff00, // Bright yellow like in the image
+        color: 0xffff00, // Bright yellow
         transparent: true,
         opacity: 0.9,
         emissive: 0xffff00,
@@ -128,47 +143,53 @@
       });
       
       const arrow = new THREE.Mesh(geometry, material);
-      arrow.rotation.x = -Math.PI / 2; // Lay flat on road
-      arrow.scale.set(0.3, 0.3, 0.3);  // Adjust size
+      arrow.rotation.x = -Math.PI / 2; // Lay flat
+      arrow.scale.set(0.6, 0.8, 0.6);  // Make arrows larger
       
       return arrow;
     }
 
-    // Create a destination marker (red pin like in the image)
+    // Create a destination marker (red base with yellow arrows pointing up)
     function createDestinationMarker() {
       const group = new THREE.Group();
       
-      // Create the pin top (hexagon shape inside)
-      const pinTopGeometry = new THREE.CylinderGeometry(0.4, 0.3, 0.6, 6); // Hexagonal pin shape
-      const pinMaterial = new THREE.MeshStandardMaterial({
-        color: 0xb01020, // Dark red like in the image
-        emissive: 0xb01020,
+      // Create red base
+      const baseGeometry = new THREE.BoxGeometry(0.7, 0.8, 0.5);
+      const baseMaterial = new THREE.MeshStandardMaterial({
+        color: 0xff0000,
+        emissive: 0xff0000,
         emissiveIntensity: 0.3
       });
       
-      // Inner hexagon (white)
-      const hexGeometry = new THREE.CylinderGeometry(0.15, 0.15, 0.1, 6);
-      const hexMaterial = new THREE.MeshStandardMaterial({
-        color: 0xffffff,
-        emissive: 0xffffff,
-        emissiveIntensity: 0.3
-      });
+      const base = new THREE.Mesh(baseGeometry, baseMaterial);
+      group.add(base);
       
-      const pinTop = new THREE.Mesh(pinTopGeometry, pinMaterial);
-      const hexInner = new THREE.Mesh(hexGeometry, hexMaterial);
+      // Add yellow arrows pointing up
+      for (let i = 0; i < 8; i++) {
+        const shape = new THREE.Shape();
+        shape.moveTo(0, 0.5);
+        shape.lineTo(-0.3, -0.5);
+        shape.lineTo(0.3, -0.5);
+        shape.lineTo(0, 0.5);
+        
+        const arrowGeometry = new THREE.ShapeGeometry(shape);
+        const arrowMaterial = new THREE.MeshStandardMaterial({
+          color: 0xffff00,
+          emissive: 0xffff00,
+          emissiveIntensity: 0.5,
+          side: THREE.DoubleSide
+        });
+        
+        const arrow = new THREE.Mesh(arrowGeometry, arrowMaterial);
+        arrow.scale.set(0.4, 0.5, 0.4);
+        
+        // Position and rotate each arrow
+        arrow.position.y = 0.4 + (i * 0.2); // Stack them upward
+        
+        group.add(arrow);
+      }
       
-      hexInner.position.y = 0.31; // Position at the top of pin
-      
-      // Pin point (bottom part)
-      const pinPointGeometry = new THREE.ConeGeometry(0.1, 0.4, 16);
-      const pinPoint = new THREE.Mesh(pinPointGeometry, pinMaterial);
-      pinPoint.position.y = -0.4;
-      
-      group.add(pinTop);
-      group.add(hexInner);
-      group.add(pinPoint);
-      
-      // Position higher (floating above road)
+      // Position higher (floating above ground)
       group.position.y = 1.0; 
       
       return group;
@@ -218,6 +239,36 @@
       }
     }
 
+    // Global variables to track waypoints and current position
+    let allWaypoints = [];
+    let userPosition = { lat: 0, lng: 0 };
+    let destinationPosition = { lat: 0, lng: 0 };
+    let distanceToDestination = 0;
+    
+    function updatePositionAndDistance() {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            userPosition.lat = position.coords.latitude;
+            userPosition.lng = position.coords.longitude;
+            
+            if (destinationPosition.lat && destinationPosition.lng) {
+              distanceToDestination = calculateDistance(
+                userPosition.lat, userPosition.lng,
+                destinationPosition.lat, destinationPosition.lng
+              );
+              
+              distanceInfo.textContent = `Distance to destination: ${Math.round(distanceToDestination)}m`;
+              distanceInfo.style.display = 'block';
+            }
+          },
+          (error) => {
+            log(`Geolocation error: ${error.message}`);
+          }
+        );
+      }
+    }
+
     async function initWaypoints() {
       document.getElementById('loading').style.display = 'block';
       debug.textContent = '';
@@ -227,8 +278,20 @@
         if (!waypoints.length) throw new Error("No waypoints found");
 
         log(`Total waypoints from server: ${waypoints.length}`);
+        allWaypoints = waypoints;
+        
+        // Store the actual destination coordinates (last waypoint)
+        if (waypoints.length > 0) {
+          const lastWaypoint = waypoints[waypoints.length - 1];
+          destinationPosition.lat = lastWaypoint.lat;
+          destinationPosition.lng = lastWaypoint.lng;
+          
+          // Start updating position and distance
+          updatePositionAndDistance();
+          setInterval(updatePositionAndDistance, 5000); // Update every 5 seconds
+        }
 
-        // Filter waypoints to remove redundant or too-close points
+        // Filter waypoints to remove redundant points
         const filteredWaypoints = [];
         let lastPoint = null;
         
@@ -250,8 +313,8 @@
             wp.lat, wp.lng
           );
           
-          // Only add points that are sufficiently far apart (5-10 meters)
-          if (distance > 5.0) {
+          // Only add points that are at least 20 meters apart (increased from 5m)
+          if (distance > 20.0) {
             filteredWaypoints.push(wp);
             lastPoint = wp;
           }
@@ -264,7 +327,6 @@
 
         // Calculate positions relative to the first waypoint
         const positions = [];
-        let maxDistance = 0;
         
         filteredWaypoints.forEach((wp) => {
           if (!wp.lat || !wp.lng) return;
@@ -275,30 +337,24 @@
           );
           
           positions.push(pos);
-          
-          // Calculate Euclidean distance to track max
-          const distance = Math.sqrt(pos.x * pos.x + pos.z * pos.z);
-          if (distance > maxDistance) {
-            maxDistance = distance;
-          }
         });
         
-        // Determine appropriate scale factor
-        let scale = 0.1; // Use a fixed scale for consistency
-        log(`Using scale factor: ${scale.toFixed(4)} for max distance: ${maxDistance.toFixed(2)}m`);
+        // Use a smaller scale factor for better visibility
+        const scale = 0.05; // Reduced from 0.1 to make things appear closer
+        log(`Using scale factor: ${scale.toFixed(4)}`);
 
         // Clear existing objects
         scene.children = scene.children.filter(child => 
           child.type === "HemisphereLight" || child.type === "DirectionalLight"
         );
         
-        // Place the destination marker only at the final waypoint
+        // Place destination marker only at the final waypoint
         const finalPosition = positions[positions.length - 1];
         const destMarker = createDestinationMarker();
         destMarker.position.set(finalPosition.x * scale, 0, finalPosition.z * scale);
         scene.add(destMarker);
         
-        // Place road arrows along the path (not at waypoints, but between them)
+        // Place directional arrows with fewer and clearer markers
         for (let i = 0; i < positions.length - 1; i++) {
           const start = positions[i];
           const end = positions[i + 1];
@@ -309,23 +365,20 @@
           const segmentLength = Math.sqrt(dx * dx + dz * dz);
           const angle = Math.atan2(dx, dz);
           
-          // Place more arrows for better visualization (one every 5 meters)
-          const arrowSpacing = 5; // meters
-          const numArrows = Math.max(3, Math.floor(segmentLength / arrowSpacing));
+          // Calculate how many arrows based on distance (fewer arrows)
+          // At most place an arrow every 30 meters
+          const maxArrowSpacing = 30; // meters
+          const numArrows = Math.max(1, Math.min(3, Math.floor(segmentLength / maxArrowSpacing)));
           
           for (let j = 0; j < numArrows; j++) {
-            // Place arrow at even intervals
-            const t = j / numArrows;
+            // Place arrows evenly between waypoints
+            const t = (j + 1) / (numArrows + 1);
             const arrowX = start.x + dx * t;
             const arrowZ = start.z + dz * t;
             
-            const arrow = createRoadArrow();
+            const arrow = createDirectionalArrow();
             arrow.position.set(arrowX * scale, 0.01, arrowZ * scale); // Slightly above ground
-            arrow.rotation.y = -angle; // Orient in direction of travel
-            
-            // Make arrows closer to destination slightly larger
-            const distanceFactor = 1 + (j / numArrows * 0.5);
-            arrow.scale.set(0.3 * distanceFactor, 0.3 * distanceFactor, 0.3 * distanceFactor);
+            arrow.rotation.y = -angle; // Point in direction of travel
             
             scene.add(arrow);
           }
@@ -350,6 +403,7 @@
 
     // Add ground plane detection for better placement on road
     let reticle;
+    let controller;
 
     async function startAR() {
       try {
@@ -365,6 +419,7 @@
         reticle.visible = false;
         scene.add(reticle);
 
+        // Create custom ARButton with calibration
         const arButton = ARButton.createButton(renderer, { 
           requiredFeatures: ['hit-test'], 
           optionalFeatures: ['dom-overlay'], 
@@ -372,14 +427,40 @@
         });
         document.body.appendChild(arButton);
 
-        // Set up AR hit test
-        let hitTestSource = null;
-        let hitTestSourceRequested = false;
-
-        renderer.xr.addEventListener('sessionstart', () => {
+        // Set up controller for manual alignment
+        renderer.xr.addEventListener('sessionstart', async function() {
           log('AR session started');
+          
+          const session = renderer.xr.getSession();
+          controller = renderer.xr.getController(0);
+          scene.add(controller);
+          
+          controller.addEventListener('select', function() {
+            // When user taps screen, if we have a hit test, use that position
+            // to calibrate our navigation elements
+            if (reticle.visible) {
+              log('Calibrating navigation elements to match ground plane');
+              
+              // Get the current position of the reticle
+              const position = new THREE.Vector3();
+              reticle.getWorldPosition(position);
+              
+              // Adjust all navigation elements to match this ground level
+              scene.traverse((object) => {
+                if (object !== reticle && object.type === 'Mesh') {
+                  // Preserve y position relative to ground, but match ground height
+                  const currentY = object.position.y;
+                  object.position.y = position.y + (currentY - 0); // Adjust relative to ground
+                }
+              });
+            }
+          });
         });
 
+        // Set up hit test system
+        let hitTestSource = null;
+        let hitTestSourceRequested = false;
+        
         renderer.xr.addEventListener('sessionend', () => {
           log('AR session ended');
           hitTestSourceRequested = false;
