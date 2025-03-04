@@ -158,7 +158,7 @@
       const hexInner = new THREE.Mesh(hexGeometry, hexMaterial);
       
       hexInner.position.y = 0.31; // Position at the top of pin
-      
+     
       // Pin point (bottom part)
       const pinPointGeometry = new THREE.ConeGeometry(0.1, 0.4, 16);
       const pinPoint = new THREE.Mesh(pinPointGeometry, pinMaterial);
@@ -276,172 +276,43 @@
           
           positions.push(pos);
           
-          // Calculate Euclidean distance to track max
-          const distance = Math.sqrt(pos.x * pos.x + pos.z * pos.z);
-          if (distance > maxDistance) {
-            maxDistance = distance;
-          }
+          maxDistance = Math.max(maxDistance, Math.sqrt(pos.x * pos.x + pos.z * pos.z));
         });
-        
-        // Determine appropriate scale factor
-        let scale = 0.1; // Use a fixed scale for consistency
-        log(`Using scale factor: ${scale.toFixed(4)} for max distance: ${maxDistance.toFixed(2)}m`);
 
-        // Clear existing objects
-        scene.children = scene.children.filter(child => 
-          child.type === "HemisphereLight" || child.type === "DirectionalLight"
-        );
-        
-        // Place the destination marker only at the final waypoint
-        const finalPosition = positions[positions.length - 1];
-        const destMarker = createDestinationMarker();
-        destMarker.position.set(finalPosition.x * scale, 0, finalPosition.z * scale);
-        scene.add(destMarker);
-        
-        // Place road arrows along the path (not at waypoints, but between them)
-        for (let i = 0; i < positions.length - 1; i++) {
-          const start = positions[i];
-          const end = positions[i + 1];
-          
-          // Calculate segment direction
-          const dx = end.x - start.x;
-          const dz = end.z - start.z;
-          const segmentLength = Math.sqrt(dx * dx + dz * dz);
-          const angle = Math.atan2(dx, dz);
-          
-          // Place more arrows for better visualization (one every 5 meters)
-          const arrowSpacing = 5; // meters
-          const numArrows = Math.max(3, Math.floor(segmentLength / arrowSpacing));
-          
-          for (let j = 0; j < numArrows; j++) {
-            // Place arrow at even intervals
-            const t = j / numArrows;
-            const arrowX = start.x + dx * t;
-            const arrowZ = start.z + dz * t;
-            
-            const arrow = createRoadArrow();
-            arrow.position.set(arrowX * scale, 0.01, arrowZ * scale); // Slightly above ground
-            arrow.rotation.y = -angle; // Orient in direction of travel
-            
-            // Make arrows closer to destination slightly larger
-            const distanceFactor = 1 + (j / numArrows * 0.5);
-            arrow.scale.set(0.3 * distanceFactor, 0.3 * distanceFactor, 0.3 * distanceFactor);
-            
-            scene.add(arrow);
-          }
-        }
+        log(`Max distance between points: ${maxDistance.toFixed(2)} meters`);
 
-        // Set up orientation tracking
-        if (window.DeviceOrientationEvent) {
-          window.addEventListener('deviceorientation', function(event) {
-            if (event.alpha !== null) {
-              orientationDisplay.textContent = `Heading: ${Math.round(event.alpha)}°`;
-              orientationDisplay.style.display = 'block';
-            }
-          });
-        }
-
+        // Proceed with rendering and interactions after loading waypoints
         document.getElementById('loading').style.display = 'none';
-      } catch (error) {
-        log(`Error initializing waypoints: ${error.message}`);
-        document.getElementById('loading').textContent = `Error: ${error.message}`;
-      }
-    }
-
-    // Add ground plane detection for better placement on road
-    let reticle;
-
-    async function startAR() {
-      try {
-        if (!('xr' in navigator)) throw new Error("WebXR not supported");
-        const supported = await navigator.xr.isSessionSupported('immersive-ar');
-        if (!supported) throw new Error("AR not supported on this device");
-
-        // Create reticle for hit-test
-        reticle = new THREE.Mesh(
-          new THREE.RingGeometry(0.15, 0.2, 32).rotateX(-Math.PI / 2),
-          new THREE.MeshBasicMaterial()
-        );
-        reticle.visible = false;
-        scene.add(reticle);
-
-        const arButton = ARButton.createButton(renderer, { 
-          requiredFeatures: ['hit-test'], 
-          optionalFeatures: ['dom-overlay'], 
-          domOverlay: { root: document.body } 
-        });
-        document.body.appendChild(arButton);
-
-        // Set up AR hit test
-        let hitTestSource = null;
-        let hitTestSourceRequested = false;
-
-        renderer.xr.addEventListener('sessionstart', () => {
-          log('AR session started');
-        });
-
-        renderer.xr.addEventListener('sessionend', () => {
-          log('AR session ended');
-          hitTestSourceRequested = false;
-          hitTestSource = null;
-        });
-
-        // Animation loop with hit test integration
-        renderer.setAnimationLoop((timestamp, frame) => {
-          if (frame) {
-            if (!hitTestSourceRequested) {
-              const session = renderer.xr.getSession();
-              
-              session.requestReferenceSpace('viewer').then((referenceSpace) => {
-                session.requestHitTestSource({ space: referenceSpace }).then((source) => {
-                  hitTestSource = source;
-                });
-              });
-              
-              session.addEventListener('end', () => {
-                hitTestSourceRequested = false;
-                hitTestSource = null;
-              });
-              
-              hitTestSourceRequested = true;
-            }
-            
-            if (hitTestSource) {
-              const referenceSpace = renderer.xr.getReferenceSpace();
-              const hitTestResults = frame.getHitTestResults(hitTestSource);
-              
-              if (hitTestResults.length) {
-                const hit = hitTestResults[0];
-                reticle.visible = true;
-                reticle.matrix.fromArray(hit.getPose(referenceSpace).transform.matrix);
-              } else {
-                reticle.visible = false;
-              }
-            }
-          }
+        
+        positions.forEach((pos, index) => {
+          const arrow = createRoadArrow();
+          arrow.position.set(pos.x, 0, pos.z);
+          scene.add(arrow);
           
-          renderer.render(scene, camera);
+          if (index === filteredWaypoints.length - 1) {
+            const marker = createDestinationMarker();
+            marker.position.set(pos.x, 0.5, pos.z);
+            scene.add(marker);
+          }
         });
 
       } catch (error) {
-        log(`AR Error: ${error.message}`);
-        alert(`AR Error: ${error.message}`);
+        log(`Error during waypoint initialization: ${error.message}`);
       }
     }
 
-    document.getElementById("enter-ar").addEventListener("click", async () => {
-      await startAR();
-      await initWaypoints();
-      document.getElementById("enter-ar").style.display = "none";
+    // Start AR experience when user clicks the button
+    const enterArButton = document.getElementById('enter-ar');
+    enterArButton.addEventListener('click', () => {
+      initWaypoints();
+      const arButton = ARButton.createButton(renderer, { requiredFeatures: ['hit-test'] });
+      document.body.appendChild(arButton);
+      renderer.setAnimationLoop(render);
     });
 
-    window.addEventListener("resize", () => {
-      if (!renderer.xr.isPresenting) {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-      }
-    });
+    function render() {
+      renderer.render(scene, camera);
+    }
   </script>
 </body>
 </html>
