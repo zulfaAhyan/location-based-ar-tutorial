@@ -207,13 +207,13 @@
         return [];
       }
       try {
-        const response = await fetch(https://waypoints-prht.onrender.com/get-waypoints/${routeId});
+        const response = await fetch(`https://waypoints-prht.onrender.com/get-waypoints/${routeId}`);
         const data = await response.json();
-        log(Loaded ${data.waypoints?.length || 0} waypoints from server);
+        log(`Loaded ${data.waypoints?.length || 0} waypoints from server`);
         
         return data.waypoints || [];
       } catch (error) {
-        log(Error fetching waypoints: ${error.message});
+        log(`Error fetching waypoints: ${error.message}`);
         return [];
       }
     }
@@ -226,7 +226,7 @@
         const waypoints = await loadWaypoints();
         if (!waypoints.length) throw new Error("No waypoints found");
 
-        log(Total waypoints from server: ${waypoints.length});
+        log(`Total waypoints from server: ${waypoints.length}`);
 
         // Filter waypoints to remove redundant or too-close points
         const filteredWaypoints = [];
@@ -257,7 +257,7 @@
           }
         });
         
-        log(Filtered down to ${filteredWaypoints.length} waypoints);
+        log(`Filtered down to ${filteredWaypoints.length} waypoints`);
 
         const firstWaypoint = filteredWaypoints[0];
         if (!firstWaypoint?.lat || !firstWaypoint?.lng) throw new Error("Invalid first waypoint");
@@ -285,7 +285,7 @@
         
         // Determine appropriate scale factor
         let scale = 0.1; // Use a fixed scale for consistency
-        log(Using scale factor: ${scale.toFixed(4)} for max distance: ${maxDistance.toFixed(2)}m);
+        log(`Using scale factor: ${scale.toFixed(4)} for max distance: ${maxDistance.toFixed(2)}m`);
 
         // Clear existing objects
         scene.children = scene.children.filter(child => 
@@ -335,7 +335,7 @@
         if (window.DeviceOrientationEvent) {
           window.addEventListener('deviceorientation', function(event) {
             if (event.alpha !== null) {
-              orientationDisplay.textContent = Heading: ${Math.round(event.alpha)}°;
+              orientationDisplay.textContent = `Heading: ${Math.round(event.alpha)}°`;
               orientationDisplay.style.display = 'block';
             }
           });
@@ -343,8 +343,8 @@
 
         document.getElementById('loading').style.display = 'none';
       } catch (error) {
-        log(Error initializing waypoints: ${error.message});
-        document.getElementById('loading').textContent = Error: ${error.message};
+        log(`Error initializing waypoints: ${error.message}`);
+        document.getElementById('loading').textContent = `Error: ${error.message}`;
       }
     }
 
@@ -424,8 +424,8 @@
         });
 
       } catch (error) {
-        log(AR Error: ${error.message});
-        alert(AR Error: ${error.message});
+        log(`AR Error: ${error.message}`);
+        alert(`AR Error: ${error.message}`);
       }
     }
 
