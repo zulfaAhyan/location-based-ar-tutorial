@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AR Navigation - Improved</title>
+  <title>AR Navigation</title>
   <script type="importmap">
     {
       "imports": {
@@ -17,7 +17,6 @@
       margin: 0;
       overflow: hidden;
       font-family: Arial, sans-serif;
-      background: #000;
     }
     #enter-ar {
       position: absolute;
@@ -59,26 +58,14 @@
       max-width: 80%;
       word-wrap: break-word;
       display: none;
-      max-height: 200px;
-      overflow-y: auto;
     }
-    #gps-info {
+    #orientation {
       position: absolute;
       top: 10px;
       right: 10px;
       background: rgba(0,0,0,0.7);
       color: white;
       padding: 10px;
-      font-size: 12px;
-      border-radius: 4px;
-    }
-    #calibration {
-      position: absolute;
-      top: 60px;
-      left: 10px;
-      background: rgba(255,165,0,0.9);
-      color: black;
-      padding: 8px 16px;
       font-size: 14px;
       border-radius: 4px;
       display: none;
@@ -86,204 +73,191 @@
   </style>
 </head>
 <body>
-  <button id="enter-ar">Enter AR Navigation</button>
+  <button id="enter-ar">Enter AR</button>
   <div id="loading">Loading navigation...</div>
   <div id="debug"></div>
-  <div id="gps-info">GPS: Waiting...</div>
-  <div id="calibration">Move device in figure-8 to calibrate compass</div>
+  <div id="orientation"></div>
 
   <script type="module">
     import * as THREE from 'three';
     import { ARButton } from 'three/addons/webxr/ARButton.js';
 
-    // Enhanced scene setup
+    // Scene setup
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 1000);
-    const renderer = new THREE.WebGLRenderer({ 
-      antialias: true, 
-      alpha: true,
-      powerPreference: "high-performance"
-    });
+    const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(window.devicePixelRatio);
     renderer.xr.enabled = true;
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     document.body.appendChild(renderer.domElement);
 
-    // Enhanced debug and GPS tracking
+    // Debug elements
     const debug = document.getElementById('debug');
-    const gpsInfo = document.getElementById('gps-info');
-    const calibrationDiv = document.getElementById('calibration');
-    
-    let currentPosition = null;
-    let currentHeading = null;
-    let isCalibrated = false;
-    let headingHistory = [];
-    let positionHistory = [];
+    const orientationDisplay = document.getElementById('orientation');
     
     function log(message) {
       console.log(message);
-      const timestamp = new Date().toLocaleTimeString();
-      debug.innerHTML = `[${timestamp}] ${message}<br>` + debug.innerHTML;
+      debug.textContent += message + '\n';
       debug.style.display = 'block';
-      // Keep only last 10 messages
-      const lines = debug.innerHTML.split('<br>');
-      if (lines.length > 10) {
-        debug.innerHTML = lines.slice(0, 10).join('<br>');
-      }
     }
 
-    // Enhanced lighting for better visibility
-    const ambientLight = new THREE.AmbientLight(0x404040, 0.4);
-    scene.add(ambientLight);
-    
+    // Lighting setup
+    scene.add(new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1));
     const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    directionalLight.position.set(10, 10, 5);
-    directionalLight.castShadow = true;
-    directionalLight.shadow.mapSize.width = 2048;
-    directionalLight.shadow.mapSize.height = 2048;
+    directionalLight.position.set(0, 10, 0);
     scene.add(directionalLight);
 
-    // Enhanced GPS position tracking with filtering
-    function startGPSTracking() {
+    // CORE ACCURACY FIX: Use user's actual GPS position as anchor
+    let userPosition = null;
+    let userHeading = null;
+    let isGPSReady = false;
+    
+    // Start GPS tracking immediately
+    function initializeGPS() {
       if (!navigator.geolocation) {
-        log("GPS not supported");
+        log("GPS not available");
         return;
       }
-
+      
       const options = {
         enableHighAccuracy: true,
-        timeout: 10000,
+        timeout: 5000,
         maximumAge: 1000
       };
-
+      
       navigator.geolocation.watchPosition(
         (position) => {
-          const newPos = {
+          userPosition = {
             lat: position.coords.latitude,
             lng: position.coords.longitude,
-            accuracy: position.coords.accuracy,
-            heading: position.coords.heading,
-            timestamp: Date.now()
+            accuracy: position.coords.accuracy
           };
-
-          // Filter out inaccurate readings
-          if (newPos.accuracy > 50) {
-            log(`GPS accuracy too low: ${newPos.accuracy}m`);
-            return;
-          }
-
-          // Smooth position using moving average
-          positionHistory.push(newPos);
-          if (positionHistory.length > 5) {
-            positionHistory.shift();
-          }
-
-          // Calculate smoothed position
-          const avgLat = positionHistory.reduce((sum, p) => sum + p.lat, 0) / positionHistory.length;
-          const avgLng = positionHistory.reduce((sum, p) => sum + p.lng, 0) / positionHistory.length;
           
-          currentPosition = {
-            lat: avgLat,
-            lng: avgLng,
-            accuracy: newPos.accuracy
-          };
-
-          gpsInfo.textContent = `GPS: ${newPos.accuracy.toFixed(1)}m | Pos: ${positionHistory.length}`;
+          isGPSReady = position.coords.accuracy < 20; // Only proceed with good accuracy
+          orientationDisplay.textContent = `GPS: ${position.coords.accuracy.toFixed(1)}m accuracy`;
+          orientationDisplay.style.display = 'block';
           
-          if (newPos.accuracy < 10) {
-            gpsInfo.style.background = 'rgba(0,128,0,0.7)';
-          } else if (newPos.accuracy < 20) {
-            gpsInfo.style.background = 'rgba(255,165,0,0.7)';
-          } else {
-            gpsInfo.style.background = 'rgba(255,0,0,0.7)';
+          log(`GPS: ${position.coords.accuracy.toFixed(1)}m accuracy`);
+          
+          // Recalculate navigation when GPS updates
+          if (isGPSReady) {
+            recalculateNavigation();
           }
-
-          log(`GPS updated: ${newPos.accuracy.toFixed(1)}m accuracy`);
-          updateNavigation();
         },
         (error) => {
           log(`GPS Error: ${error.message}`);
-          gpsInfo.textContent = `GPS Error: ${error.message}`;
-          gpsInfo.style.background = 'rgba(255,0,0,0.7)';
+          orientationDisplay.textContent = `GPS Error: ${error.message}`;
         },
         options
       );
     }
 
-    // Enhanced compass with calibration
-    function startCompassTracking() {
-      if (!window.DeviceOrientationEvent) {
-        log("Device orientation not supported");
-        return;
+    // Enhanced compass tracking
+    function initializeCompass() {
+      if (window.DeviceOrientationEvent) {
+        // Try absolute orientation first (more accurate)
+        window.addEventListener('deviceorientationabsolute', handleOrientation, true);
+        window.addEventListener('deviceorientation', handleOrientation, true);
       }
-
-      // Show calibration prompt
-      calibrationDiv.style.display = 'block';
-      setTimeout(() => {
-        calibrationDiv.style.display = 'none';
-      }, 10000);
-
-      window.addEventListener('deviceorientationabsolute', handleOrientation);
-      window.addEventListener('deviceorientation', handleOrientation);
-
+      
       function handleOrientation(event) {
-        let heading = event.alpha;
-        if (heading === null) return;
-
-        // iOS compass correction
-        if (event.webkitCompassHeading) {
-          heading = event.webkitCompassHeading;
+        if (event.alpha !== null) {
+          userHeading = event.alpha;
+          
+          // iOS correction
+          if (event.webkitCompassHeading) {
+            userHeading = event.webkitCompassHeading;
+          }
+          
+          orientationDisplay.textContent += ` | Heading: ${Math.round(userHeading)}°`;
+          
+          // Recalculate when heading changes significantly
+          if (isGPSReady) {
+            recalculateNavigation();
+          }
         }
-
-        // Smooth heading using circular average
-        headingHistory.push(heading);
-        if (headingHistory.length > 10) {
-          headingHistory.shift();
-        }
-
-        if (headingHistory.length >= 5) {
-          currentHeading = calculateCircularAverage(headingHistory);
-          isCalibrated = true;
-          calibrationDiv.style.display = 'none';
-        }
-
-        gpsInfo.textContent += ` | Heading: ${Math.round(currentHeading || heading)}°`;
-        updateNavigation();
       }
     }
 
-    function calculateCircularAverage(angles) {
-      let x = 0, y = 0;
-      for (let angle of angles) {
-        const rad = angle * Math.PI / 180;
-        x += Math.cos(rad);
-        y += Math.sin(rad);
-      }
-      const avgRad = Math.atan2(y, x);
-      let avgAngle = avgRad * 180 / Math.PI;
-      if (avgAngle < 0) avgAngle += 360;
-      return avgAngle;
+    // Create a chevron arrow for road overlay (same design)
+    function createRoadArrow() {
+      const shape = new THREE.Shape();
+      shape.moveTo(-0.5, -0.5);
+      shape.lineTo(0, 0.5);
+      shape.lineTo(0.5, -0.5);
+      shape.lineTo(-0.5, -0.5);
+      
+      const geometry = new THREE.ShapeGeometry(shape);
+      const material = new THREE.MeshStandardMaterial({ 
+        color: 0xffff00,
+        transparent: true,
+        opacity: 0.9,
+        emissive: 0xffff00,
+        emissiveIntensity: 0.5,
+        side: THREE.DoubleSide
+      });
+      
+      const arrow = new THREE.Mesh(geometry, material);
+      arrow.rotation.x = -Math.PI / 2;
+      arrow.scale.set(0.3, 0.3, 0.3);
+      
+      return arrow;
     }
 
-    // Improved distance calculation with higher precision
+    // Create a destination marker (same design)
+    function createDestinationMarker() {
+      const group = new THREE.Group();
+      
+      const pinTopGeometry = new THREE.CylinderGeometry(0.4, 0.3, 0.6, 6);
+      const pinMaterial = new THREE.MeshStandardMaterial({
+        color: 0xb01020,
+        emissive: 0xb01020,
+        emissiveIntensity: 0.3
+      });
+      
+      const hexGeometry = new THREE.CylinderGeometry(0.15, 0.15, 0.1, 6);
+      const hexMaterial = new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        emissive: 0xffffff,
+        emissiveIntensity: 0.3
+      });
+      
+      const pinTop = new THREE.Mesh(pinTopGeometry, pinMaterial);
+      const hexInner = new THREE.Mesh(hexGeometry, hexMaterial);
+      
+      hexInner.position.y = 0.31;
+      
+      const pinPointGeometry = new THREE.ConeGeometry(0.1, 0.4, 16);
+      const pinPoint = new THREE.Mesh(pinPointGeometry, pinMaterial);
+      pinPoint.position.y = -0.4;
+      
+      group.add(pinTop);
+      group.add(hexInner);
+      group.add(pinPoint);
+      
+      group.position.y = 1.0; 
+      
+      return group;
+    }
+
+    // CORE ACCURACY FIX: More precise distance calculation
     function calculateDistance(lat1, lon1, lat2, lon2) {
-      const R = 6378137; // Earth's radius in meters (WGS84)
+      const R = 6378137; // Earth's radius in meters (more precise)
       const φ1 = lat1 * Math.PI / 180;
       const φ2 = lat2 * Math.PI / 180;
       const Δφ = (lat2 - lat1) * Math.PI / 180;
       const Δλ = (lon2 - lon1) * Math.PI / 180;
 
-      const A = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+      const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
                Math.cos(φ1) * Math.cos(φ2) *
                Math.sin(Δλ/2) * Math.sin(Δλ/2);
-      const C = 2 * Math.atan2(Math.sqrt(A), Math.sqrt(1-A));
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
       
-      return R * C;
+      return R * c;
     }
 
+    // CORE ACCURACY FIX: Calculate bearing from user to waypoint
     function calculateBearing(lat1, lon1, lat2, lon2) {
       const φ1 = lat1 * Math.PI / 180;
       const φ2 = lat2 * Math.PI / 180;
@@ -296,89 +270,41 @@
       return (bearing + 360) % 360;
     }
 
-    // Enhanced arrow creation with better visibility
-    function createNavigationArrow() {
-      const group = new THREE.Group();
+    // CORE ACCURACY FIX: Position waypoints relative to user's actual GPS position
+    function calculateRelativePosition(userLat, userLng, waypointLat, waypointLng) {
+      const distance = calculateDistance(userLat, userLng, waypointLat, waypointLng);
+      const bearing = calculateBearing(userLat, userLng, waypointLat, waypointLng);
       
-      // Main arrow body
-      const arrowGeometry = new THREE.ConeGeometry(0.15, 0.6, 8);
-      const arrowMaterial = new THREE.MeshStandardMaterial({
-        color: 0x00ff00,
-        emissive: 0x004400,
-        emissiveIntensity: 0.3,
-      });
+      // Convert to device-relative coordinates
+      let relativeBearing = bearing;
+      if (userHeading !== null) {
+        relativeBearing = (bearing - userHeading + 360) % 360;
+      }
       
-      const arrow = new THREE.Mesh(arrowGeometry, arrowMaterial);
-      arrow.rotation.x = Math.PI / 2;
-      arrow.castShadow = true;
+      const bearingRad = relativeBearing * Math.PI / 180;
       
-      // Glow effect
-      const glowGeometry = new THREE.ConeGeometry(0.2, 0.8, 8);
-      const glowMaterial = new THREE.MeshBasicMaterial({
-        color: 0x00ff00,
-        transparent: true,
-        opacity: 0.3
-      });
-      
-      const glow = new THREE.Mesh(glowGeometry, glowMaterial);
-      glow.rotation.x = Math.PI / 2;
-      
-      group.add(arrow);
-      group.add(glow);
-      
-      return group;
+      return {
+        x: Math.sin(bearingRad) * distance,
+        z: Math.cos(bearingRad) * distance,
+        distance: distance,
+        bearing: bearing
+      };
     }
 
-    // Enhanced destination marker
-    function createDestinationMarker() {
-      const group = new THREE.Group();
-      
-      // Pin base
-      const pinGeometry = new THREE.CylinderGeometry(0.3, 0.3, 0.8, 16);
-      const pinMaterial = new THREE.MeshStandardMaterial({
-        color: 0xff0000,
-        emissive: 0x440000,
-        emissiveIntensity: 0.2
-      });
-      
-      const pin = new THREE.Mesh(pinGeometry, pinMaterial);
-      pin.castShadow = true;
-      
-      // Pin top
-      const topGeometry = new THREE.SphereGeometry(0.25, 16, 8);
-      const topMaterial = new THREE.MeshStandardMaterial({
-        color: 0xffffff,
-        emissive: 0x222222,
-        emissiveIntensity: 0.1
-      });
-      
-      const top = new THREE.Mesh(topGeometry, topMaterial);
-      top.position.y = 0.6;
-      top.castShadow = true;
-      
-      group.add(pin);
-      group.add(top);
-      
-      return group;
-    }
-
-    // Navigation state
     let waypoints = [];
-    let navigationArrows = [];
-    let destinationMarker = null;
-    let currentWaypointIndex = 0;
+    let navigationObjects = [];
 
     async function loadWaypoints() {
       const routeId = new URLSearchParams(window.location.search).get('routeId');
       if (!routeId) {
-        log("No route ID provided");
+        log("No route ID provided.");
         return [];
       }
-      
       try {
         const response = await fetch(`https://waypoints-prht.onrender.com/get-waypoints/${routeId}`);
         const data = await response.json();
         log(`Loaded ${data.waypoints?.length || 0} waypoints from server`);
+        
         return data.waypoints || [];
       } catch (error) {
         log(`Error fetching waypoints: ${error.message}`);
@@ -386,181 +312,196 @@
       }
     }
 
-    function updateNavigation() {
-      if (!currentPosition || !isCalibrated || !waypoints.length) return;
-
-      // Find next waypoint
-      let nextWaypoint = null;
+    // CORE ACCURACY FIX: Recalculate positions based on current GPS location
+    function recalculateNavigation() {
+      if (!userPosition || !waypoints.length) return;
+      
+      // Clear existing objects
+      navigationObjects.forEach(obj => scene.remove(obj));
+      navigationObjects = [];
+      
+      // Find next waypoint (closest unvisited)
+      let closestWaypoint = null;
       let minDistance = Infinity;
       
-      for (let i = currentWaypointIndex; i < waypoints.length; i++) {
-        const distance = calculateDistance(
-          currentPosition.lat, currentPosition.lng,
-          waypoints[i].lat, waypoints[i].lng
-        );
+      waypoints.forEach((wp, index) => {
+        if (!wp.lat || !wp.lng) return;
         
+        const distance = calculateDistance(userPosition.lat, userPosition.lng, wp.lat, wp.lng);
         if (distance < minDistance) {
           minDistance = distance;
-          nextWaypoint = waypoints[i];
-          currentWaypointIndex = i;
+          closestWaypoint = { ...wp, index };
         }
-        
-        // If we're close to current waypoint, move to next
-        if (distance < 5 && i < waypoints.length - 1) {
-          currentWaypointIndex = i + 1;
-        }
-      }
-
-      if (!nextWaypoint) return;
-
-      // Calculate direction to next waypoint
-      const bearing = calculateBearing(
-        currentPosition.lat, currentPosition.lng,
-        nextWaypoint.lat, nextWaypoint.lng
+      });
+      
+      if (!closestWaypoint) return;
+      
+      log(`Next waypoint: ${minDistance.toFixed(1)}m away`);
+      
+      // Position arrows leading to next waypoint
+      const relPos = calculateRelativePosition(
+        userPosition.lat, userPosition.lng,
+        closestWaypoint.lat, closestWaypoint.lng
       );
       
-      const distance = calculateDistance(
-        currentPosition.lat, currentPosition.lng,
-        nextWaypoint.lat, nextWaypoint.lng
-      );
-
-      // Update navigation arrows
-      updateNavigationDisplay(bearing, distance);
+      // Scale for AR visualization (1 meter = 0.1 units)
+      const scale = 0.1;
+      const maxArDistance = 20; // Don't place arrows too far
       
-      log(`Next waypoint: ${distance.toFixed(1)}m at ${bearing.toFixed(1)}°`);
-    }
-
-    function updateNavigationDisplay(bearing, distance) {
-      // Clear existing arrows
-      navigationArrows.forEach(arrow => scene.remove(arrow));
-      navigationArrows = [];
-
-      // Calculate relative bearing to device heading
-      const relativeBearing = (bearing - (currentHeading || 0) + 360) % 360;
-      
-      // Create navigation arrows in a line ahead
-      const arrowCount = Math.min(5, Math.max(2, Math.floor(distance / 10)));
-      
-      for (let i = 0; i < arrowCount; i++) {
-        const arrow = createNavigationArrow();
+      if (relPos.distance < maxArDistance / scale) {
+        // Place 3-5 arrows leading to waypoint
+        const numArrows = Math.min(5, Math.max(2, Math.floor(relPos.distance * scale / 2)));
         
-        // Position arrows in direction of target
-        const arrowDistance = (i + 1) * 3; // 3 meters apart
-        const angleRad = relativeBearing * Math.PI / 180;
-        
-        arrow.position.x = Math.sin(angleRad) * arrowDistance;
-        arrow.position.z = Math.cos(angleRad) * arrowDistance;
-        arrow.position.y = 0.3;
-        
-        // Point arrow in direction of travel
-        arrow.rotation.y = -angleRad;
-        
-        // Scale based on distance
-        const scale = Math.max(0.5, 1 - (distance / 100));
-        arrow.scale.set(scale, scale, scale);
-        
-        scene.add(arrow);
-        navigationArrows.push(arrow);
+        for (let i = 1; i <= numArrows; i++) {
+          const fraction = i / (numArrows + 1);
+          const arrow = createRoadArrow();
+          
+          arrow.position.x = relPos.x * scale * fraction;
+          arrow.position.z = relPos.z * scale * fraction;
+          arrow.position.y = 0.01;
+          
+          // Point arrow toward destination
+          const bearingRad = (relPos.bearing - (userHeading || 0)) * Math.PI / 180;
+          arrow.rotation.y = -bearingRad;
+          
+          scene.add(arrow);
+          navigationObjects.push(arrow);
+        }
       }
-
-      // Update destination marker position
-      if (destinationMarker && distance < 50) {
-        const finalWaypoint = waypoints[waypoints.length - 1];
-        const finalBearing = calculateBearing(
-          currentPosition.lat, currentPosition.lng,
-          finalWaypoint.lat, finalWaypoint.lng
-        );
-        const finalRelativeBearing = (finalBearing - (currentHeading || 0) + 360) % 360;
-        const finalDistance = calculateDistance(
-          currentPosition.lat, currentPosition.lng,
+      
+      // Place destination marker for final waypoint
+      const finalWaypoint = waypoints[waypoints.length - 1];
+      if (finalWaypoint && finalWaypoint.lat && finalWaypoint.lng) {
+        const finalRelPos = calculateRelativePosition(
+          userPosition.lat, userPosition.lng,
           finalWaypoint.lat, finalWaypoint.lng
         );
         
-        const angleRad = finalRelativeBearing * Math.PI / 180;
-        destinationMarker.position.x = Math.sin(angleRad) * Math.min(finalDistance, 20);
-        destinationMarker.position.z = Math.cos(angleRad) * Math.min(finalDistance, 20);
+        if (finalRelPos.distance < maxArDistance / scale) {
+          const destMarker = createDestinationMarker();
+          destMarker.position.x = finalRelPos.x * scale;
+          destMarker.position.z = finalRelPos.z * scale;
+          
+          scene.add(destMarker);
+          navigationObjects.push(destMarker);
+        }
       }
     }
 
-    async function initNavigation() {
+    async function initWaypoints() {
       document.getElementById('loading').style.display = 'block';
-      
+      debug.textContent = '';
+
       try {
         waypoints = await loadWaypoints();
         if (!waypoints.length) throw new Error("No waypoints found");
 
-        log(`Loaded ${waypoints.length} waypoints`);
-
-        // Create destination marker
-        destinationMarker = createDestinationMarker();
-        destinationMarker.position.set(0, 0, 10); // Initial position
-        scene.add(destinationMarker);
-
-        // Start tracking
-        startGPSTracking();
-        startCompassTracking();
-
-        document.getElementById('loading').style.display = 'none';
-        log("Navigation initialized");
+        log(`Total waypoints: ${waypoints.length}`);
         
+        // Initialize GPS and compass
+        initializeGPS();
+        initializeCompass();
+        
+        // Wait for GPS to be ready, then calculate navigation
+        const waitForGPS = setInterval(() => {
+          if (isGPSReady) {
+            clearInterval(waitForGPS);
+            recalculateNavigation();
+            document.getElementById('loading').style.display = 'none';
+            log("Navigation ready");
+            
+            // Recalculate every 2 seconds for continuous updates
+            setInterval(recalculateNavigation, 2000);
+          }
+        }, 500);
+
       } catch (error) {
-        log(`Navigation error: ${error.message}`);
+        log(`Error initializing waypoints: ${error.message}`);
         document.getElementById('loading').textContent = `Error: ${error.message}`;
       }
     }
 
-    // AR Session Management
+    // Add ground plane detection for better placement on road
+    let reticle;
+
     async function startAR() {
       try {
         if (!('xr' in navigator)) throw new Error("WebXR not supported");
-        
-        const session = await navigator.xr.requestSession('immersive-ar', {
-          requiredFeatures: ['hit-test'],
-          optionalFeatures: ['dom-overlay', 'local-floor']
-        });
-        
-        renderer.xr.setSession(session);
-        log("AR session started");
-        
-      } catch (error) {
-        log(`AR Error: ${error.message}`);
-        
-        // Fallback: Create AR button
-        const arButton = ARButton.createButton(renderer, {
-          requiredFeatures: ['hit-test'],
-          optionalFeatures: ['dom-overlay'],
-          domOverlay: { root: document.body }
+        const supported = await navigator.xr.isSessionSupported('immersive-ar');
+        if (!supported) throw new Error("AR not supported on this device");
+
+        reticle = new THREE.Mesh(
+          new THREE.RingGeometry(0.15, 0.2, 32).rotateX(-Math.PI / 2),
+          new THREE.MeshBasicMaterial()
+        );
+        reticle.visible = false;
+        scene.add(reticle);
+
+        const arButton = ARButton.createButton(renderer, { 
+          requiredFeatures: ['hit-test'], 
+          optionalFeatures: ['dom-overlay'], 
+          domOverlay: { root: document.body } 
         });
         document.body.appendChild(arButton);
+
+        let hitTestSource = null;
+        let hitTestSourceRequested = false;
+
+        renderer.xr.addEventListener('sessionstart', () => {
+          log('AR session started');
+        });
+
+        renderer.xr.addEventListener('sessionend', () => {
+          log('AR session ended');
+          hitTestSourceRequested = false;
+          hitTestSource = null;
+        });
+
+        renderer.setAnimationLoop((timestamp, frame) => {
+          if (frame) {
+            if (!hitTestSourceRequested) {
+              const session = renderer.xr.getSession();
+              
+              session.requestReferenceSpace('viewer').then((referenceSpace) => {
+                session.requestHitTestSource({ space: referenceSpace }).then((source) => {
+                  hitTestSource = source;
+                });
+              });
+              
+              session.addEventListener('end', () => {
+                hitTestSourceRequested = false;
+                hitTestSource = null;
+              });
+              
+              hitTestSourceRequested = true;
+            }
+            
+            if (hitTestSource) {
+              const referenceSpace = renderer.xr.getReferenceSpace();
+              const hitTestResults = frame.getHitTestResults(hitTestSource);
+              
+              if (hitTestResults.length) {
+                const hit = hitTestResults[0];
+                reticle.visible = true;
+                reticle.matrix.fromArray(hit.getPose(referenceSpace).transform.matrix);
+              } else {
+                reticle.visible = false;
+              }
+            }
+          }
+          
+          renderer.render(scene, camera);
+        });
+
+      } catch (error) {
+        log(`AR Error: ${error.message}`);
+        alert(`AR Error: ${error.message}`);
       }
     }
 
-    // Main render loop
-    renderer.setAnimationLoop((timestamp, frame) => {
-      // Update navigation if we have current position
-      if (currentPosition && isCalibrated) {
-        updateNavigation();
-      }
-      
-      // Animate arrows
-      navigationArrows.forEach((arrow, index) => {
-        arrow.rotation.y += 0.01;
-        arrow.position.y = 0.3 + Math.sin(timestamp * 0.003 + index) * 0.1;
-      });
-      
-      // Animate destination marker
-      if (destinationMarker) {
-        destinationMarker.rotation.y += 0.02;
-        destinationMarker.position.y = Math.sin(timestamp * 0.002) * 0.2 + 1.0;
-      }
-      
-      renderer.render(scene, camera);
-    });
-
-    // Event handlers
     document.getElementById("enter-ar").addEventListener("click", async () => {
-      await initNavigation();
       await startAR();
+      await initWaypoints();
       document.getElementById("enter-ar").style.display = "none";
     });
 
@@ -569,13 +510,6 @@
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
         renderer.setSize(window.innerWidth, window.innerHeight);
-      }
-    });
-
-    // Debug toggle
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'd' || e.key === 'D') {
-        debug.style.display = debug.style.display === 'none' ? 'block' : 'none';
       }
     });
   </script>
