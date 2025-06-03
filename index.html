@@ -336,7 +336,7 @@
         if (window.DeviceOrientationEvent) {
           window.addEventListener('deviceorientation', function(event) {
             if (event.alpha !== null) {
-              orientationDisplay.textContent = Heading: ${Math.round(event.alpha)}°;
+              orientationDisplay.textContent = `Heading: ${Math.round(event.alpha)}°`;
               orientationDisplay.style.display = 'block';
             }
           });
