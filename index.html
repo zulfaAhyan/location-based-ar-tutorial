@@ -207,7 +207,7 @@
         return [];
       }
       try {
-        const response = await fetch(https://waypoints-prht.onrender.com/get-waypoints/${routeId});
+        const response = await fetch(`https://waypoints-prht.onrender.com/get-waypoints/${routeId}`);
         const data = await response.json();
         log(Loaded ${data.waypoints?.length || 0} waypoints from server);
         
