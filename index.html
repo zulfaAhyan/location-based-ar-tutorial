@@ -227,7 +227,7 @@
         const waypoints = await loadWaypoints();
         if (!waypoints.length) throw new Error("No waypoints found");
 
-        log(Total waypoints from server: ${waypoints.length});
+        log(`Total waypoints from server: ${waypoints.length}`);
 
         // Filter waypoints to remove redundant or too-close points
         const filteredWaypoints = [];
