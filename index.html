@@ -258,7 +258,7 @@
           }
         });
         
-        log(Filtered down to ${filteredWaypoints.length} waypoints);
+        log(`Filtered down to ${filteredWaypoints.length} waypoints`);
 
         const firstWaypoint = filteredWaypoints[0];
         if (!firstWaypoint?.lat || !firstWaypoint?.lng) throw new Error("Invalid first waypoint");
@@ -344,7 +344,7 @@
 
         document.getElementById('loading').style.display = 'none';
       } catch (error) {
-        log(Error initializing waypoints: ${error.message});
+        log(`Error initializing waypoints: ${error.message}`);
         document.getElementById('loading').textContent = Error: ${error.message};
       }
     }
@@ -425,8 +425,8 @@
         });
 
       } catch (error) {
-        log(AR Error: ${error.message});
-        alert(AR Error: ${error.message});
+        log(`AR Error: ${error.message}`);
+        alert(`AR Error: ${error.message}`);
       }
     }
 
