@@ -218,6 +218,22 @@
       }
     }
 
+    //this is added. you can remove it if it doesnot work after testing
+    const groundGeometry = new THREE.PlaneGeometry(50, 50); // 50x50 meters
+    const groundMaterial = new THREE.MeshStandardMaterial({
+      color: 0x444444,
+      roughness: 1,
+      metalness: 0,
+      transparent: true,
+      opacity: 0.4,
+      side: THREE.DoubleSide
+    });
+    const groundPlane = new THREE.Mesh(groundGeometry, groundMaterial);
+    groundPlane.rotation.x = -Math.PI / 2; // Lay flat
+    groundPlane.position.y = 0; // Y = 0 becomes the "road level"
+    scene.add(groundPlane);
+
+
 
     async function initWaypoints() {
       document.getElementById('loading').style.display = 'block';
@@ -321,7 +337,7 @@
             const arrowZ = start.z + dz * t;
             
             const arrow = createRoadArrow();
-            arrow.position.set(arrowX * scale, 0.01, arrowZ * scale); // Slightly above ground
+            arrow.position.set(arrowX * scale, 0, arrowZ * scale); // Slightly above ground
             arrow.rotation.y = -angle; // Orient in direction of travel
             
             // Make arrows closer to destination slightly larger
