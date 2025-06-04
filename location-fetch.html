@@ -2,17 +2,15 @@
 <html>
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Auto Place Arrow in AR</title>
-    <style>
-      body { margin: 0; overflow: hidden; }
-    </style>
+    <title>AR Navigation Path</title>
+    <style>body { margin: 0; overflow: hidden; }</style>
   </head>
   <body>
     <script type="module">
       import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
       import { ARButton } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/webxr/ARButton.js';
 
-      let scene, camera, renderer, reticle, hitTestSource = null, arrowPlaced = false;
+      let scene, camera, renderer, reticle, hitTestSource = null, arrowsPlaced = false;
 
       scene = new THREE.Scene();
       camera = new THREE.PerspectiveCamera();
@@ -22,10 +20,8 @@
       document.body.appendChild(renderer.domElement);
       document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['hit-test'] }));
 
-      // Lighting
       scene.add(new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1));
 
-      // Reticle
       const ringGeo = new THREE.RingGeometry(0.05, 0.06, 32).rotateX(-Math.PI / 2);
       const ringMat = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
       reticle = new THREE.Mesh(ringGeo, ringMat);
@@ -33,12 +29,11 @@
       reticle.visible = false;
       scene.add(reticle);
 
-      // Arrow model
-      function createArrow() {
+      function createArrow(color = 0xff0000) {
         const arrow = new THREE.Group();
         const shaft = new THREE.BoxGeometry(0.1, 0.02, 0.3);
         const head = new THREE.ConeGeometry(0.07, 0.2, 16);
-        const material = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+        const material = new THREE.MeshStandardMaterial({ color });
 
         const shaftMesh = new THREE.Mesh(shaft, material);
         shaftMesh.position.z = -0.15;
@@ -50,6 +45,29 @@
         arrow.add(shaftMesh);
         arrow.add(headMesh);
         return arrow;
+      }
+
+      function placeArrows(reticleMatrix) {
+        const basePos = new THREE.Vector3();
+        basePos.setFromMatrixPosition(reticleMatrix);
+
+        const direction = new THREE.Vector3(0, 0, -1); // forward
+        const rotation = new THREE.Quaternion();
+        rotation.setFromRotationMatrix(reticleMatrix);
+        direction.applyQuaternion(rotation);
+
+        const stepDistance = 0.5;
+        const steps = 10;
+
+        for (let i = 0; i < steps; i++) {
+          const arrow = createArrow(i === steps - 1 ? 0x0000ff : 0xff0000); // Blue for final marker
+          const pos = basePos.clone().add(direction.clone().multiplyScalar(i * stepDistance));
+          arrow.position.copy(pos);
+          arrow.quaternion.copy(rotation);
+          scene.add(arrow);
+        }
+
+        arrowsPlaced = true;
       }
 
       renderer.setAnimationLoop((timestamp, frame) => {
@@ -66,21 +84,16 @@
           }
 
           if (hitTestSource) {
-            const hitTestResults = frame.getHitTestResults(hitTestSource);
-            if (hitTestResults.length > 0) {
-              const hit = hitTestResults[0];
+            const hits = frame.getHitTestResults(hitTestSource);
+            if (hits.length > 0) {
+              const hit = hits[0];
               const pose = hit.getPose(referenceSpace);
 
               reticle.visible = true;
               reticle.matrix.fromArray(pose.transform.matrix);
 
-              if (!arrowPlaced) {
-                const arrow = createArrow();
-                arrow.position.setFromMatrixPosition(reticle.matrix);
-                arrow.position.y += 0.05;
-                arrow.quaternion.setFromRotationMatrix(reticle.matrix);
-                scene.add(arrow);
-                arrowPlaced = true;
+              if (!arrowsPlaced) {
+                placeArrows(reticle.matrix);
               }
             } else {
               reticle.visible = false;
