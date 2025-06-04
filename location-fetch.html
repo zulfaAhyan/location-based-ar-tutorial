@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebXR Test</title>
+    <title>Place Arrow in AR</title>
     <style>body { margin: 0; overflow: hidden; }</style>
   </head>
   <body>
@@ -10,8 +10,9 @@
       import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
       import { ARButton } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/webxr/ARButton.js';
 
-      let scene, camera, renderer, reticle;
+      let scene, camera, renderer, reticle, arrowPlaced = false;
 
+      // 1. Set up scene, camera, renderer
       scene = new THREE.Scene();
       camera = new THREE.PerspectiveCamera();
       renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -24,7 +25,7 @@
       const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
       scene.add(light);
 
-      // Reticle (green ring)
+      // 2. Create the reticle
       const ringGeo = new THREE.RingGeometry(0.05, 0.06, 32).rotateX(-Math.PI / 2);
       const ringMat = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
       reticle = new THREE.Mesh(ringGeo, ringMat);
@@ -32,10 +33,43 @@
       reticle.visible = false;
       scene.add(reticle);
 
+      // 3. Arrow model (chevron shape)
+      function createArrow() {
+        const arrow = new THREE.Group();
+
+        const shaft = new THREE.BoxGeometry(0.1, 0.02, 0.3);
+        const head = new THREE.ConeGeometry(0.07, 0.2, 16);
+        const material = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+
+        const shaftMesh = new THREE.Mesh(shaft, material);
+        shaftMesh.position.z = -0.15;
+
+        const headMesh = new THREE.Mesh(head, material);
+        headMesh.rotation.x = -Math.PI / 2;
+        headMesh.position.z = -0.35;
+
+        arrow.add(shaftMesh);
+        arrow.add(headMesh);
+
+        return arrow;
+      }
+
+      // 4. Start WebXR session
       renderer.xr.addEventListener('sessionstart', async () => {
         const session = renderer.xr.getSession();
         const viewerSpace = await session.requestReferenceSpace('viewer');
         const hitTestSource = await session.requestHitTestSource({ space: viewerSpace });
+
+        // Handle user taps
+        renderer.domElement.addEventListener('click', () => {
+          if (reticle.visible && !arrowPlaced) {
+            const arrow = createArrow();
+            arrow.position.setFromMatrixPosition(reticle.matrix);
+            arrow.quaternion.setFromRotationMatrix(reticle.matrix);
+            scene.add(arrow);
+            arrowPlaced = true;
+          }
+        });
 
         renderer.setAnimationLoop((_, frame) => {
           if (frame) {
