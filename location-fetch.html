@@ -172,36 +172,55 @@
                         if (supported) {
                             this.updateStatus('AR Ready - Click to start');
                         } else {
-                            this.updateStatus('AR not supported on this device');
-                            document.getElementById('startButton').disabled = true;
+                            this.updateStatus('AR not supported - Try Chrome/Edge on Android/iOS');
+                            this.showCompatibilityInfo();
                         }
                     } catch (error) {
                         this.updateStatus('Error checking AR support');
-                        document.getElementById('startButton').disabled = true;
+                        this.showCompatibilityInfo();
                     }
                 } else {
-                    this.updateStatus('WebXR not available');
-                    document.getElementById('startButton').disabled = true;
+                    this.updateStatus('WebXR not available - Update your browser');
+                    this.showCompatibilityInfo();
                 }
+            }
+            
+            showCompatibilityInfo() {
+                document.getElementById('info').innerHTML += `
+                    <div style="margin-top: 10px; font-size: 12px; color: #ffaa00;">
+                        <div><strong>AR Requirements:</strong></div>
+                        <div>• Android: Chrome 79+ with ARCore</div>
+                        <div>• iOS: Safari 13+ with ARKit</div>
+                        <div>• HTTPS connection required</div>
+                    </div>
+                `;
             }
             
             async startAR() {
                 try {
                     this.updateStatus('Starting AR...');
                     
+                    // Try with optional features first for better compatibility
                     this.session = await navigator.xr.requestSession('immersive-ar', {
-                        requiredFeatures: ['hit-test'],
+                        optionalFeatures: ['hit-test', 'dom-overlay'],
+                        domOverlay: { root: document.body }
                     });
                     
                     await this.renderer.xr.setSession(this.session);
                     
-                    this.referenceSpace = await this.session.requestReferenceSpace('local-floor');
+                    // Try multiple reference space types for compatibility
+                    this.referenceSpace = await this.getCompatibleReferenceSpace();
                     
-                    // Request hit test source
-                    const viewerSpace = await this.session.requestReferenceSpace('viewer');
-                    this.hitTestSource = await this.session.requestHitTestSource({
-                        space: viewerSpace
-                    });
+                    // Request hit test source with error handling
+                    try {
+                        const viewerSpace = await this.session.requestReferenceSpace('viewer');
+                        this.hitTestSource = await this.session.requestHitTestSource({
+                            space: viewerSpace
+                        });
+                    } catch (hitTestError) {
+                        console.warn('Hit test not available, using alternative method');
+                        this.hitTestSource = null;
+                    }
                     
                     this.session.addEventListener('end', () => {
                         this.onSessionEnd();
@@ -215,7 +234,35 @@
                 } catch (error) {
                     console.error('AR session failed:', error);
                     this.updateStatus('Failed to start AR: ' + error.message);
+                    this.showFallbackInstructions();
                 }
+            }
+            
+            async getCompatibleReferenceSpace() {
+                // Try reference spaces in order of preference
+                const spaceTypes = ['local-floor', 'local', 'viewer', 'bounded-floor'];
+                
+                for (const spaceType of spaceTypes) {
+                    try {
+                        const space = await this.session.requestReferenceSpace(spaceType);
+                        console.log(`Using reference space: ${spaceType}`);
+                        return space;
+                    } catch (error) {
+                        console.warn(`${spaceType} reference space not supported`);
+                    }
+                }
+                
+                throw new Error('No compatible reference space found');
+            }
+            
+            showFallbackInstructions() {
+                document.getElementById('instructions').innerHTML = `
+                    <div><strong>AR Not Available</strong></div>
+                    <div>• Your device may not support WebXR AR</div>
+                    <div>• Try using Chrome or Edge browser</div>
+                    <div>• Ensure you're on HTTPS</div>
+                    <div>• Some features may require newer devices</div>
+                `;
             }
             
             createArrow() {
@@ -315,6 +362,17 @@
                             // Auto-place arrows as user moves forward
                             this.placeArrow(hitPoint);
                         }
+                    }
+                } else if (frame && !this.hitTestSource) {
+                    // Fallback: place arrows based on camera position when hit-test unavailable
+                    const pose = frame.getViewerPose(this.referenceSpace);
+                    if (pose) {
+                        const cameraPos = new THREE.Vector3(
+                            pose.transform.position.x,
+                            pose.transform.position.y - 1.5, // Simulate ground level
+                            pose.transform.position.z
+                        );
+                        this.placeArrow(cameraPos);
                     }
                 }
                 
