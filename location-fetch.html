@@ -1,406 +1,95 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
+<html>
+  <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AR Navigation - Arrow Placement</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <title>Auto Place Arrow in AR</title>
     <style>
-        body {
-            margin: 0;
-            padding: 0;
-            font-family: Arial, sans-serif;
-            background: #000;
-            color: #fff;
-            overflow: hidden;
-        }
-        
-        #container {
-            position: relative;
-            width: 100vw;
-            height: 100vh;
-        }
-        
-        #ui {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            z-index: 100;
-            background: rgba(0, 0, 0, 0.7);
-            padding: 15px;
-            border-radius: 10px;
-            backdrop-filter: blur(10px);
-        }
-        
-        #startButton {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border: none;
-            color: white;
-            padding: 12px 24px;
-            border-radius: 25px;
-            cursor: pointer;
-            font-size: 16px;
-            font-weight: bold;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
-        }
-        
-        #startButton:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
-        }
-        
-        #startButton:disabled {
-            background: #666;
-            cursor: not-allowed;
-            transform: none;
-        }
-        
-        #info {
-            margin-top: 10px;
-            font-size: 14px;
-            line-height: 1.4;
-        }
-        
-        #instructions {
-            position: absolute;
-            bottom: 20px;
-            left: 20px;
-            right: 20px;
-            background: rgba(0, 0, 0, 0.8);
-            padding: 15px;
-            border-radius: 10px;
-            text-align: center;
-            backdrop-filter: blur(10px);
-        }
-        
-        .arrow-count {
-            background: rgba(255, 255, 255, 0.2);
-            padding: 5px 10px;
-            border-radius: 15px;
-            display: inline-block;
-            margin-top: 5px;
-        }
+      body { margin: 0; overflow: hidden; }
     </style>
-</head>
-<body>
-    <div id="container">
-        <div id="ui">
-            <button id="startButton">Start AR Navigation</button>
-            <div id="info">
-                <div>Status: <span id="status">Ready</span></div>
-                <div class="arrow-count">Arrows: <span id="arrowCount">0</span></div>
-            </div>
-        </div>
-        
-        <div id="instructions">
-            <div><strong>AR Navigation Instructions:</strong></div>
-            <div>• Point your device at the ground/road surface</div>
-            <div>• Move forward to automatically place navigation arrows</div>
-            <div>• Arrows will appear with proper spacing as you walk</div>
-        </div>
-    </div>
+  </head>
+  <body>
+    <script type="module">
+      import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+      import { ARButton } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/webxr/ARButton.js';
 
-    <script>
-        class ARNavigationApp {
-            constructor() {
-                this.scene = null;
-                this.camera = null;
-                this.renderer = null;
-                this.session = null;
-                this.referenceSpace = null;
-                this.hitTestSource = null;
-                this.arrows = [];
-                this.lastArrowPosition = null;
-                this.minArrowDistance = 2.0; // Minimum distance between arrows in meters
-                this.arrowCount = 0;
-                
-                this.init();
+      let scene, camera, renderer, reticle, hitTestSource = null, arrowPlaced = false;
+
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera();
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.xr.enabled = true;
+      document.body.appendChild(renderer.domElement);
+      document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['hit-test'] }));
+
+      // Lighting
+      scene.add(new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1));
+
+      // Reticle
+      const ringGeo = new THREE.RingGeometry(0.05, 0.06, 32).rotateX(-Math.PI / 2);
+      const ringMat = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+      reticle = new THREE.Mesh(ringGeo, ringMat);
+      reticle.matrixAutoUpdate = false;
+      reticle.visible = false;
+      scene.add(reticle);
+
+      // Arrow model
+      function createArrow() {
+        const arrow = new THREE.Group();
+        const shaft = new THREE.BoxGeometry(0.1, 0.02, 0.3);
+        const head = new THREE.ConeGeometry(0.07, 0.2, 16);
+        const material = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+
+        const shaftMesh = new THREE.Mesh(shaft, material);
+        shaftMesh.position.z = -0.15;
+
+        const headMesh = new THREE.Mesh(head, material);
+        headMesh.rotation.x = -Math.PI / 2;
+        headMesh.position.z = -0.35;
+
+        arrow.add(shaftMesh);
+        arrow.add(headMesh);
+        return arrow;
+      }
+
+      renderer.setAnimationLoop((timestamp, frame) => {
+        if (frame) {
+          const referenceSpace = renderer.xr.getReferenceSpace();
+          const session = renderer.xr.getSession();
+
+          if (!hitTestSource) {
+            session.requestReferenceSpace('viewer').then((viewerSpace) => {
+              session.requestHitTestSource({ space: viewerSpace }).then((source) => {
+                hitTestSource = source;
+              });
+            });
+          }
+
+          if (hitTestSource) {
+            const hitTestResults = frame.getHitTestResults(hitTestSource);
+            if (hitTestResults.length > 0) {
+              const hit = hitTestResults[0];
+              const pose = hit.getPose(referenceSpace);
+
+              reticle.visible = true;
+              reticle.matrix.fromArray(pose.transform.matrix);
+
+              if (!arrowPlaced) {
+                const arrow = createArrow();
+                arrow.position.setFromMatrixPosition(reticle.matrix);
+                arrow.position.y += 0.05;
+                arrow.quaternion.setFromRotationMatrix(reticle.matrix);
+                scene.add(arrow);
+                arrowPlaced = true;
+              }
+            } else {
+              reticle.visible = false;
             }
-            
-            init() {
-                this.setupScene();
-                this.setupEventListeners();
-                this.checkARSupport();
-            }
-            
-            setupScene() {
-                // Create scene
-                this.scene = new THREE.Scene();
-                
-                // Create camera
-                this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-                
-                // Create renderer
-                this.renderer = new THREE.WebGLRenderer({ 
-                    antialias: true, 
-                    alpha: true,
-                    preserveDrawingBuffer: true
-                });
-                this.renderer.setSize(window.innerWidth, window.innerHeight);
-                this.renderer.setPixelRatio(window.devicePixelRatio);
-                this.renderer.xr.enabled = true;
-                
-                document.getElementById('container').appendChild(this.renderer.domElement);
-                
-                // Add ambient light
-                const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-                this.scene.add(ambientLight);
-                
-                // Add directional light
-                const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-                directionalLight.position.set(0, 5, 5);
-                this.scene.add(directionalLight);
-            }
-            
-            setupEventListeners() {
-                document.getElementById('startButton').addEventListener('click', () => {
-                    this.startAR();
-                });
-                
-                window.addEventListener('resize', () => {
-                    this.camera.aspect = window.innerWidth / window.innerHeight;
-                    this.camera.updateProjectionMatrix();
-                    this.renderer.setSize(window.innerWidth, window.innerHeight);
-                });
-            }
-            
-            async checkARSupport() {
-                if (navigator.xr) {
-                    try {
-                        const supported = await navigator.xr.isSessionSupported('immersive-ar');
-                        if (supported) {
-                            this.updateStatus('AR Ready - Click to start');
-                        } else {
-                            this.updateStatus('AR not supported - Try Chrome/Edge on Android/iOS');
-                            this.showCompatibilityInfo();
-                        }
-                    } catch (error) {
-                        this.updateStatus('Error checking AR support');
-                        this.showCompatibilityInfo();
-                    }
-                } else {
-                    this.updateStatus('WebXR not available - Update your browser');
-                    this.showCompatibilityInfo();
-                }
-            }
-            
-            showCompatibilityInfo() {
-                document.getElementById('info').innerHTML += `
-                    <div style="margin-top: 10px; font-size: 12px; color: #ffaa00;">
-                        <div><strong>AR Requirements:</strong></div>
-                        <div>• Android: Chrome 79+ with ARCore</div>
-                        <div>• iOS: Safari 13+ with ARKit</div>
-                        <div>• HTTPS connection required</div>
-                    </div>
-                `;
-            }
-            
-            async startAR() {
-                try {
-                    this.updateStatus('Starting AR...');
-                    
-                    // Try with optional features first for better compatibility
-                    this.session = await navigator.xr.requestSession('immersive-ar', {
-                        optionalFeatures: ['hit-test', 'dom-overlay'],
-                        domOverlay: { root: document.body }
-                    });
-                    
-                    await this.renderer.xr.setSession(this.session);
-                    
-                    // Try multiple reference space types for compatibility
-                    this.referenceSpace = await this.getCompatibleReferenceSpace();
-                    
-                    // Request hit test source with error handling
-                    try {
-                        const viewerSpace = await this.session.requestReferenceSpace('viewer');
-                        this.hitTestSource = await this.session.requestHitTestSource({
-                            space: viewerSpace
-                        });
-                    } catch (hitTestError) {
-                        console.warn('Hit test not available, using alternative method');
-                        this.hitTestSource = null;
-                    }
-                    
-                    this.session.addEventListener('end', () => {
-                        this.onSessionEnd();
-                    });
-                    
-                    this.updateStatus('AR Active - Move to place arrows');
-                    this.renderer.setAnimationLoop((time, frame) => {
-                        this.render(time, frame);
-                    });
-                    
-                } catch (error) {
-                    console.error('AR session failed:', error);
-                    this.updateStatus('Failed to start AR: ' + error.message);
-                    this.showFallbackInstructions();
-                }
-            }
-            
-            async getCompatibleReferenceSpace() {
-                // Try reference spaces in order of preference
-                const spaceTypes = ['local-floor', 'local', 'viewer', 'bounded-floor'];
-                
-                for (const spaceType of spaceTypes) {
-                    try {
-                        const space = await this.session.requestReferenceSpace(spaceType);
-                        console.log(`Using reference space: ${spaceType}`);
-                        return space;
-                    } catch (error) {
-                        console.warn(`${spaceType} reference space not supported`);
-                    }
-                }
-                
-                throw new Error('No compatible reference space found');
-            }
-            
-            showFallbackInstructions() {
-                document.getElementById('instructions').innerHTML = `
-                    <div><strong>AR Not Available</strong></div>
-                    <div>• Your device may not support WebXR AR</div>
-                    <div>• Try using Chrome or Edge browser</div>
-                    <div>• Ensure you're on HTTPS</div>
-                    <div>• Some features may require newer devices</div>
-                `;
-            }
-            
-            createArrow() {
-                const arrowGroup = new THREE.Group();
-                
-                // Arrow shaft (cylinder)
-                const shaftGeometry = new THREE.CylinderGeometry(0.02, 0.02, 0.4, 8);
-                const shaftMaterial = new THREE.MeshPhongMaterial({ 
-                    color: 0x00ff88,
-                    emissive: 0x002211
-                });
-                const shaft = new THREE.Mesh(shaftGeometry, shaftMaterial);
-                shaft.rotation.z = Math.PI / 2;
-                arrowGroup.add(shaft);
-                
-                // Arrow head (cone)
-                const headGeometry = new THREE.ConeGeometry(0.06, 0.15, 8);
-                const headMaterial = new THREE.MeshPhongMaterial({ 
-                    color: 0x00ffaa,
-                    emissive: 0x003322
-                });
-                const head = new THREE.Mesh(headGeometry, headMaterial);
-                head.rotation.z = -Math.PI / 2;
-                head.position.x = 0.25;
-                arrowGroup.add(head);
-                
-                // Glow effect
-                const glowGeometry = new THREE.SphereGeometry(0.15, 16, 16);
-                const glowMaterial = new THREE.MeshBasicMaterial({ 
-                    color: 0x00ff88,
-                    transparent: true,
-                    opacity: 0.3
-                });
-                const glow = new THREE.Mesh(glowGeometry, glowMaterial);
-                arrowGroup.add(glow);
-                
-                // Animation
-                arrowGroup.userData.originalY = 0;
-                arrowGroup.userData.time = 0;
-                
-                return arrowGroup;
-            }
-            
-            updateArrowAnimations() {
-                this.arrows.forEach(arrow => {
-                    arrow.userData.time += 0.02;
-                    arrow.position.y = arrow.userData.originalY + Math.sin(arrow.userData.time) * 0.05;
-                    arrow.rotation.y += 0.01;
-                });
-            }
-            
-            shouldPlaceArrow(position) {
-                if (!this.lastArrowPosition) return true;
-                
-                const distance = position.distanceTo(this.lastArrowPosition);
-                return distance >= this.minArrowDistance;
-            }
-            
-            placeArrow(hitPoint) {
-                if (!this.shouldPlaceArrow(hitPoint)) return;
-                
-                const arrow = this.createArrow();
-                arrow.position.copy(hitPoint);
-                arrow.position.y += 0.1; // Slightly above ground
-                arrow.userData.originalY = arrow.position.y;
-                
-                this.scene.add(arrow);
-                this.arrows.push(arrow);
-                this.lastArrowPosition = hitPoint.clone();
-                
-                this.arrowCount++;
-                document.getElementById('arrowCount').textContent = this.arrowCount;
-                
-                // Remove old arrows if too many
-                if (this.arrows.length > 10) {
-                    const oldArrow = this.arrows.shift();
-                    this.scene.remove(oldArrow);
-                    this.arrowCount--;
-                }
-            }
-            
-            render(time, frame) {
-                if (frame && this.hitTestSource) {
-                    const hitTestResults = frame.getHitTestResults(this.hitTestSource);
-                    
-                    if (hitTestResults.length > 0) {
-                        const hit = hitTestResults[0];
-                        const pose = hit.getPose(this.referenceSpace);
-                        
-                        if (pose) {
-                            const hitPoint = new THREE.Vector3(
-                                pose.transform.position.x,
-                                pose.transform.position.y,
-                                pose.transform.position.z
-                            );
-                            
-                            // Auto-place arrows as user moves forward
-                            this.placeArrow(hitPoint);
-                        }
-                    }
-                } else if (frame && !this.hitTestSource) {
-                    // Fallback: place arrows based on camera position when hit-test unavailable
-                    const pose = frame.getViewerPose(this.referenceSpace);
-                    if (pose) {
-                        const cameraPos = new THREE.Vector3(
-                            pose.transform.position.x,
-                            pose.transform.position.y - 1.5, // Simulate ground level
-                            pose.transform.position.z
-                        );
-                        this.placeArrow(cameraPos);
-                    }
-                }
-                
-                this.updateArrowAnimations();
-                this.renderer.render(this.scene, this.camera);
-            }
-            
-            onSessionEnd() {
-                this.hitTestSource = null;
-                this.session = null;
-                this.arrows.forEach(arrow => this.scene.remove(arrow));
-                this.arrows = [];
-                this.lastArrowPosition = null;
-                this.arrowCount = 0;
-                document.getElementById('arrowCount').textContent = '0';
-                this.updateStatus('AR session ended');
-                this.renderer.setAnimationLoop(null);
-            }
-            
-            updateStatus(message) {
-                document.getElementById('status').textContent = message;
-            }
+          }
         }
-        
-        // Initialize the app when page loads
-        window.addEventListener('load', () => {
-            new ARNavigationApp();
-        });
+
+        renderer.render(scene, camera);
+      });
     </script>
-</body>
+  </body>
 </html>
