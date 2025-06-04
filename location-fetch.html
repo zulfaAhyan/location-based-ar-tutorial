@@ -72,20 +72,40 @@
           }
         });
 
-        renderer.setAnimationLoop((_, frame) => {
+        function render(timestamp, frame) {
           if (frame) {
-            const refSpace = renderer.xr.getReferenceSpace();
-            const hits = frame.getHitTestResults(hitTestSource);
-
-            if (hits.length > 0) {
-              const hit = hits[0];
-              const pose = hit.getPose(refSpace);
-              reticle.visible = true;
-              reticle.matrix.fromArray(pose.transform.matrix);
-            } else {
-              reticle.visible = false;
+            const referenceSpace = renderer.xr.getReferenceSpace();
+            const session = renderer.xr.getSession();
+            const viewerPose = frame.getViewerPose(referenceSpace);
+        
+            if (viewerPose) {
+              const results = frame.getHitTestResults(hitTestSource);
+              if (results.length > 0) {
+                const hit = results[0];
+                const pose = hit.getPose(referenceSpace);
+        
+                reticle.visible = true;
+                reticle.matrix.fromArray(pose.transform.matrix);
+        
+                // Place the arrow automatically if not placed yet
+                if (!arrowPlaced) {
+                  const arrow = createArrow();
+                  arrow.position.setFromMatrixPosition(reticle.matrix);
+                  arrow.position.y += 0.05; // Slightly lift it above ground
+                  arrow.quaternion.setFromRotationMatrix(reticle.matrix);
+                  scene.add(arrow);
+                  arrowPlaced = true;
+                }
+        
+              } else {
+                reticle.visible = false;
+              }
             }
           }
+        
+          renderer.render(scene, camera);
+        }
+
 
           renderer.render(scene, camera);
         });
