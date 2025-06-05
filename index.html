@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AR Waypoints Demo</title>
+    <title>AR Waypoints Navigation</title>
     <style>
       body { margin: 0; overflow: hidden; }
     </style>
@@ -32,7 +32,6 @@
         const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
         scene.add(light);
 
-        // Reticle
         const ringGeo = new THREE.RingGeometry(0.05, 0.06, 32).rotateX(-Math.PI / 2);
         const ringMat = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
         reticle = new THREE.Mesh(ringGeo, ringMat);
@@ -63,7 +62,7 @@
                     if (routeId && waypoints.length === 0) {
                       fetchWaypoints(routeId).then(data => {
                         waypoints = data.waypoints || [];
-                        placeArrowsFromWaypoints(reticle.matrix);
+                        placeArrowsFromReticle(reticle.matrix);
                       });
                     }
                   }
@@ -72,7 +71,6 @@
                 }
               }
             }
-
             renderer.render(scene, camera);
           });
         });
@@ -90,27 +88,64 @@
         }
       }
 
-      function createArrow(color = 0xff0000) {
-        const arrow = new THREE.Group();
+      function createArrow() {
+        const shape = new THREE.Shape();
+        shape.moveTo(-0.5, -0.5);
+        shape.lineTo(0, 0.5);
+        shape.lineTo(0.5, -0.5);
+        shape.lineTo(-0.5, -0.5);
 
-        const shaft = new THREE.BoxGeometry(0.1, 0.02, 0.3);
-        const head = new THREE.ConeGeometry(0.07, 0.2, 16);
-        const material = new THREE.MeshStandardMaterial({ color });
+        const geometry = new THREE.ShapeGeometry(shape);
+        const material = new THREE.MeshStandardMaterial({
+          color: 0xff0000,
+          transparent: true,
+          opacity: 0.9,
+          emissive: 0xff0000,
+          emissiveIntensity: 0.5,
+          side: THREE.DoubleSide
+        });
 
-        const shaftMesh = new THREE.Mesh(shaft, material);
-        shaftMesh.position.z = -0.15;
-
-        const headMesh = new THREE.Mesh(head, material);
-        headMesh.rotation.x = -Math.PI / 2;
-        headMesh.position.z = -0.35;
-
-        arrow.add(shaftMesh);
-        arrow.add(headMesh);
+        const arrow = new THREE.Mesh(geometry, material);
+        arrow.rotation.x = -Math.PI / 2;
+        arrow.scale.set(0.3, 0.3, 0.3);
 
         return arrow;
       }
 
-      function placeArrowsFromWaypoints(matrix) {
+      function createDestinationMarker() {
+        const group = new THREE.Group();
+
+        const pinTopGeometry = new THREE.CylinderGeometry(0.4, 0.3, 0.6, 6);
+        const pinMaterial = new THREE.MeshStandardMaterial({
+          color: 0xb01020,
+          emissive: 0xb01020,
+          emissiveIntensity: 0.3
+        });
+
+        const hexGeometry = new THREE.CylinderGeometry(0.15, 0.15, 0.1, 6);
+        const hexMaterial = new THREE.MeshStandardMaterial({
+          color: 0xffffff,
+          emissive: 0xffffff,
+          emissiveIntensity: 0.3
+        });
+
+        const pinTop = new THREE.Mesh(pinTopGeometry, pinMaterial);
+        const hexInner = new THREE.Mesh(hexGeometry, hexMaterial);
+        hexInner.position.y = 0.31;
+
+        const pinPointGeometry = new THREE.ConeGeometry(0.1, 0.4, 16);
+        const pinPoint = new THREE.Mesh(pinPointGeometry, pinMaterial);
+        pinPoint.position.y = -0.4;
+
+        group.add(pinTop);
+        group.add(hexInner);
+        group.add(pinPoint);
+        group.position.y = 1.0;
+
+        return group;
+      }
+
+      function placeArrowsFromReticle(matrix) {
         const basePos = new THREE.Vector3();
         basePos.setFromMatrixPosition(matrix);
 
@@ -122,15 +157,17 @@
 
         for (let i = 0; i < waypoints.length; i++) {
           const isLast = i === waypoints.length - 1;
-          const arrow = createArrow(isLast ? 0x0000ff : 0xff0000);
+          const model = isLast ? createDestinationMarker() : createArrow();
+
           const pos = basePos.clone().add(direction.clone().multiplyScalar(i * stepDistance));
-          arrow.position.copy(pos);
-          arrow.quaternion.copy(rotation);
-          scene.add(arrow);
+          model.position.copy(pos);
+          model.quaternion.copy(rotation);
+          scene.add(model);
         }
 
         arrowsPlaced = true;
       }
+
     </script>
   </body>
 </html>
