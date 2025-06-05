@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AR Waypoints Navigation</title>
+    <title>AR Waypoints Demo</title>
     <style>
       body { margin: 0; overflow: hidden; }
     </style>
@@ -16,6 +16,7 @@
       let scene, camera, renderer, reticle;
       let waypoints = [];
       let arrowsPlaced = false;
+      let firstReticleMatrix = null;
 
       init();
 
@@ -57,12 +58,13 @@
                   reticle.visible = true;
                   reticle.matrix.fromArray(pose.transform.matrix);
 
-                  if (!arrowsPlaced) {
+                  if (!arrowsPlaced && !firstReticleMatrix) {
+                    firstReticleMatrix = new THREE.Matrix4().fromArray(pose.transform.matrix);
                     const routeId = new URLSearchParams(window.location.search).get('routeId');
                     if (routeId && waypoints.length === 0) {
                       fetchWaypoints(routeId).then(data => {
                         waypoints = data.waypoints || [];
-                        placeArrowsFromReticle(reticle.matrix);
+                        placeArrowsFromWaypoints(firstReticleMatrix);
                       });
                     }
                   }
@@ -70,8 +72,9 @@
                   reticle.visible = false;
                 }
               }
+
+              renderer.render(scene, camera);
             }
-            renderer.render(scene, camera);
           });
         });
       }
@@ -96,8 +99,8 @@
         shape.lineTo(-0.5, -0.5);
 
         const geometry = new THREE.ShapeGeometry(shape);
-        const material = new THREE.MeshStandardMaterial({
-          color: 0xffff00, // Bright yellow like in the image
+        const material = new THREE.MeshStandardMaterial({ 
+          color: 0xff0000,
           transparent: true,
           opacity: 0.9,
           emissive: 0xff0000,
@@ -108,7 +111,6 @@
         const arrow = new THREE.Mesh(geometry, material);
         arrow.rotation.x = -Math.PI / 2;
         arrow.scale.set(0.3, 0.3, 0.3);
-
         return arrow;
       }
 
@@ -145,7 +147,7 @@
         return group;
       }
 
-      function placeArrowsFromReticle(matrix) {
+      function placeArrowsFromWaypoints(matrix) {
         const basePos = new THREE.Vector3();
         basePos.setFromMatrixPosition(matrix);
 
@@ -157,17 +159,15 @@
 
         for (let i = 0; i < waypoints.length; i++) {
           const isLast = i === waypoints.length - 1;
-          const model = isLast ? createDestinationMarker() : createArrow();
-
+          const object = isLast ? createDestinationMarker() : createArrow();
           const pos = basePos.clone().add(direction.clone().multiplyScalar(i * stepDistance));
-          model.position.copy(pos);
-          model.quaternion.copy(rotation);
-          scene.add(model);
+          object.position.copy(pos);
+          object.quaternion.copy(rotation);
+          scene.add(object);
         }
 
         arrowsPlaced = true;
       }
-
     </script>
   </body>
 </html>
