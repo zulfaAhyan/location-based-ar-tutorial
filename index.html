@@ -126,19 +126,37 @@
         const headingRadians = headingOffset * Math.PI / 180;
         scene.children = scene.children.filter(obj => obj.type === 'HemisphereLight' || obj.type === 'DirectionalLight' || obj === reticle);
 
-        for (let wp of waypoints) {
+        let offset = 0;
+        for (let i = 0; i < waypoints.length; i++) {
+          const wp = waypoints[i];
           const { x, z } = calculateRelativePosition(userLocation.lat, userLocation.lng, wp.lat, wp.lng);
           const relX = Math.cos(headingRadians) * x - Math.sin(headingRadians) * z;
           const relZ = Math.sin(headingRadians) * x + Math.cos(headingRadians) * z;
           const pos = new THREE.Vector3(relX * 0.1, 0, relZ * 0.1);
 
-          const object = wp.type === 'destination' ? createDestinationMarker() : createRoadArrow();
-          if (reticle?.visible) {
-            object.position.set(pos.x, reticle.position.y, pos.z);
+          // Add fake arrows before destination if last point is too close
+          if (wp.type === 'destination') {
+            const prev = waypoints[i - 1];
+            const dist = Math.sqrt(x * x + z * z);
+            if (dist < 400 && prev) {
+              const { x: px, z: pz } = calculateRelativePosition(userLocation.lat, userLocation.lng, prev.lat, prev.lng);
+              const numExtra = Math.floor((400 - dist) / 50);
+              for (let j = 1; j <= numExtra; j++) {
+                const interX = px + (x - px) * (j / (numExtra + 1));
+                const interZ = pz + (z - pz) * (j / (numExtra + 1));
+                const arrow = createRoadArrow();
+                arrow.position.set(interX * 0.1, 0, interZ * 0.1);
+                scene.add(arrow);
+              }
+            }
+            const marker = createDestinationMarker();
+            marker.position.copy(pos);
+            scene.add(marker);
           } else {
-            object.position.copy(pos);
+            const arrow = createRoadArrow();
+            arrow.position.copy(pos);
+            scene.add(arrow);
           }
-          scene.add(object);
         }
         document.getElementById('loading').style.display = 'none';
       } catch (e) {
