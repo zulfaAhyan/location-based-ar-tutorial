@@ -234,74 +234,65 @@
     scene.add(groundPlane);
 
 
-
     async function initWaypoints() {
       document.getElementById('loading').style.display = 'block';
       debug.textContent = '';
-
+    
       try {
         const waypoints = await loadWaypoints();
         if (!waypoints.length) throw new Error("No waypoints found");
-
+    
         log(`Total waypoints from server: ${waypoints.length}`);
-
+    
         // Filter waypoints to remove redundant or too-close points
         const filteredWaypoints = [];
         let lastPoint = null;
-       
+    
         waypoints.forEach((wp, index) => {
           if (!wp.lat || !wp.lng) return;
-         
+    
           if (index === 0 || index === waypoints.length - 1) {
-            // Always keep first and last point
             filteredWaypoints.push(wp);
             lastPoint = wp;
             return;
           }
-         
+    
           if (!lastPoint) return;
-         
-          // Calculate distance from last added point
+    
           const distance = calculateDistance(
             lastPoint.lat, lastPoint.lng,
             wp.lat, wp.lng
           );
-         
-          // Only add points that are sufficiently far apart (5-10 meters)
+    
           if (distance > 5.0) {
             filteredWaypoints.push(wp);
             lastPoint = wp;
           }
         });
-       
+    
         log(`Filtered down to ${filteredWaypoints.length} waypoints`);
-
+    
         const firstWaypoint = filteredWaypoints[0];
         if (!firstWaypoint?.lat || !firstWaypoint?.lng) throw new Error("Invalid first waypoint");
-
-        // Calculate positions relative to the first waypoint
+    
         const positions = [];
         let maxDistance = 0;
-       
+    
         filteredWaypoints.forEach((wp) => {
-          if (!wp.lat || !wp.lng) return;
-         
           const pos = calculateRelativePosition(
             firstWaypoint.lat, firstWaypoint.lng,
             wp.lat, wp.lng
           );
-         
+    
           positions.push(pos);
-         
-          // Calculate Euclidean distance to track max
+    
           const distance = Math.sqrt(pos.x * pos.x + pos.z * pos.z);
           if (distance > maxDistance) {
             maxDistance = distance;
           }
         });
-       
-        // Determine appropriate scale factor
-        //let scale = 0.1; // Use a fixed scale for consistency
+    
+        // Scale selection
         let scale;
         if (maxDistance < 100) {
           scale = 0.4;
@@ -310,54 +301,81 @@
         } else {
           scale = 0.1;
         }
-
+    
         log(`Using scale factor: ${scale.toFixed(4)} for max distance: ${maxDistance.toFixed(2)}m`);
-
-        // Clear existing objects
+    
+        // 🧭 Get current location to anchor AR path
+        let userOffset = { x: 0, z: 0 };
+        if ('geolocation' in navigator) {
+          await new Promise((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition((position) => {
+              const currentLat = position.coords.latitude;
+              const currentLng = position.coords.longitude;
+    
+              const offset = calculateRelativePosition(
+                currentLat, currentLng,
+                firstWaypoint.lat, firstWaypoint.lng
+              );
+    
+              userOffset = { x: -offset.x * scale, z: -offset.z * scale };
+              log(`Anchoring AR path to user position: offset (${userOffset.x.toFixed(2)}, ${userOffset.z.toFixed(2)})`);
+              resolve();
+            }, (error) => {
+              log(`Geolocation error: ${error.message}`);
+              resolve(); // Fallback to default if not allowed
+            }, { enableHighAccuracy: true });
+          });
+        }
+    
+        // Clear previous AR objects
         scene.children = scene.children.filter(child =>
           child.type === "HemisphereLight" || child.type === "DirectionalLight"
         );
-       
-        // Place the destination marker only at the final waypoint
+    
+        // Destination marker
         const finalPosition = positions[positions.length - 1];
         const destMarker = createDestinationMarker();
-        destMarker.position.set(finalPosition.x * scale, 0, finalPosition.z * scale);
+        destMarker.position.set(
+          finalPosition.x * scale + userOffset.x,
+          0,
+          finalPosition.z * scale + userOffset.z
+        );
         scene.add(destMarker);
-       
-        // Place road arrows along the path (not at waypoints, but between them)
+    
+        // Arrows
         for (let i = 0; i < positions.length - 1; i++) {
           const start = positions[i];
           const end = positions[i + 1];
-         
-          // Calculate segment direction
+    
           const dx = end.x - start.x;
           const dz = end.z - start.z;
           const segmentLength = Math.sqrt(dx * dx + dz * dz);
           const angle = Math.atan2(dx, dz);
-         
-          // Place more arrows for better visualization (one every 5 meters)
-          const arrowSpacing = 5; // meters
+    
+          const arrowSpacing = 5;
           const numArrows = Math.max(3, Math.floor(segmentLength / arrowSpacing));
-         
+    
           for (let j = 0; j < numArrows; j++) {
-            // Place arrow at even intervals
             const t = j / numArrows;
             const arrowX = start.x + dx * t;
             const arrowZ = start.z + dz * t;
-           
+    
             const arrow = createRoadArrow();
-            arrow.position.set(arrowX * scale, 0, arrowZ * scale); // Slightly above ground
-            arrow.rotation.y = -angle; // Orient in direction of travel
-           
-            // Make arrows closer to destination slightly larger
+            arrow.position.set(
+              arrowX * scale + userOffset.x,
+              0,
+              arrowZ * scale + userOffset.z
+            );
+            arrow.rotation.y = -angle;
+    
             const distanceFactor = 1 + (j / numArrows * 0.5);
             arrow.scale.set(0.3 * distanceFactor, 0.3 * distanceFactor, 0.3 * distanceFactor);
-           
+    
             scene.add(arrow);
           }
         }
-
-        // Set up orientation tracking
+    
+        // Orientation debug
         if (window.DeviceOrientationEvent) {
           window.addEventListener('deviceorientation', function(event) {
             if (event.alpha !== null) {
@@ -366,13 +384,17 @@
             }
           });
         }
-
+    
         document.getElementById('loading').style.display = 'none';
       } catch (error) {
         log(`Error initializing waypoints: ${error.message}`);
         document.getElementById('loading').textContent = `Error: ${error.message}`;
       }
     }
+
+
+
+    
 
     // Add ground plane detection for better placement on road
     let reticle;
