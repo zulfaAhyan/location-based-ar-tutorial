@@ -65,10 +65,16 @@
     }
 
     scene.add(new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1));
-    scene.add(new THREE.DirectionalLight(0xffffff, 0.8).position.set(0, 10, 0));
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    directionalLight.position.set(0, 10, 0);
+    scene.add(directionalLight);
 
     function createRoadArrow() {
-      const shape = new THREE.Shape().moveTo(-0.5, -0.5).lineTo(0, 0.5).lineTo(0.5, -0.5).lineTo(-0.5, -0.5);
+      const shape = new THREE.Shape();
+      shape.moveTo(-0.5, -0.5);
+      shape.lineTo(0, 0.5);
+      shape.lineTo(0.5, -0.5);
+      shape.lineTo(-0.5, -0.5);
       const geometry = new THREE.ShapeGeometry(shape);
       const material = new THREE.MeshStandardMaterial({ color: 0xffff00, transparent: true, opacity: 0.9, emissive: 0xffff00, emissiveIntensity: 0.5, side: THREE.DoubleSide });
       const arrow = new THREE.Mesh(geometry, material);
@@ -86,6 +92,16 @@
       pinPoint.position.y = -0.4;
       group.add(pinTop, hexInner, pinPoint);
       return group;
+    }
+
+    function calculateRelativePosition(lat1, lon1, lat2, lon2) {
+      const R = 6371000;
+      const φ1 = lat1 * Math.PI / 180, φ2 = lat2 * Math.PI / 180;
+      const Δφ = (lat2 - lat1) * Math.PI / 180;
+      const Δλ = (lon2 - lon1) * Math.PI / 180;
+      const x = R * Δλ * Math.cos((φ1 + φ2) / 2);
+      const z = R * Δφ;
+      return { x, z };
     }
 
     async function getUserLocation() {
@@ -118,8 +134,7 @@
 
           const object = wp.type === 'destination' ? createDestinationMarker() : createRoadArrow();
           if (reticle?.visible) {
-            const y = reticle.position.y;
-            object.position.set(pos.x, y, pos.z);
+            object.position.set(pos.x, reticle.position.y, pos.z);
           } else {
             object.position.copy(pos);
           }
