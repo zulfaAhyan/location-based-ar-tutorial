@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Static AR Navigation Demo</title>
+  <title>AR Navigation Demo</title>
   <script type="importmap">
     {
       "imports": {
@@ -70,7 +70,7 @@
     async function initStaticRoute() {
       const scale = 0.1;
       const arrowSpacing = 25; // meters
-      const totalDistance = 2300; // meters
+      const totalDistance = 2000; // meters
       const numArrows = Math.floor(totalDistance / arrowSpacing);
 
       for (let i = 0; i <= numArrows; i++) {
